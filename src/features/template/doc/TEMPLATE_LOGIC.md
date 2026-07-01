@@ -17,6 +17,16 @@ Denna modul erbjuder ett interaktivt gränssnitt för att dynamiskt kontera och 
   - Om länken i Kolumn H leder till ett externt **Google Kalkylark (spreadsheet)**, ska systemet **INTE** visa den standardiserade verifikationsmallen.
   - Istället ska backend öppna det externa kalkylarket, hämta data från fliken namngiven **'Lön'** inom cellområdet **`B9:F70`**, och parsa detta direkt som en lönespecifikation för att generera färdiga konteringsförslag (lön, skatt, arbetsgivaravgifter).
 
+### C. Intelligent Auto-Kontering (Beskrivningsmatchning)
+* **Regel:** Automatiskt igenkännande av transaktionsmönster för att underlätta manuell kontering.
+* **Logik:** Om den valda radens `'Beskrivning'` (Kolumn C) matchar kända nyckelord (t.ex. "Hyra", "Adobe", "Google Cloud", "Lön") eller överensstämmer med tidigare bokförda rader, ska systemet automatiskt föreslå och ladda in rätt konteringsmall när fliken `'Kontering'` öppnas. Användaren ska inte behöva välja mallen manuellt från dropdown-menyn.
+
+### D. Realtidsvalidering av Balans (Buntningsspärr)
+* **Regel:** Garantera att inga obalanserade verifikat sparas i kalkylbladet.
+* **Logik:** Konteringsmallen i frontend ska ha en dynamisk tabell-footer som i realtid beräknar och visar summan för total Debet, total Kredit samt differensen (`Debet - Kredit`). 
+  - Om differensen **inte är exakt noll**, ska knappen för att spara eller buntas förbli **helt inaktiverad (disabled)**.
+  - Ett tydligt, rött varningsmeddelande ska visas bredvid knappen med den exakta obalansen (t.ex. *"Obalans: Debet och Kredit diffar med -150.00 kr"*).
+
 ---
 
 ## 3. FUNKTIONELL SPECIFIKATION (SERVER-SIDE)
