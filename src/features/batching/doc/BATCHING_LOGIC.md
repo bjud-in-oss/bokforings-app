@@ -1,34 +1,37 @@
 # FEATURE LOGIC: BUNTNING & BATCHING (SIE-4 EXPORT)
 
 ## 1. ANSVARSOMRÅDE
-Denna modul ansvarar för att läsa transaktionsdata från kalkylbladet (t.ex. rader som involverar likvidkonton som 1930, 1630 eller dylikt), gruppera dem i balanserade verifikationer, samt erbjuda export till det standardiserade svenska bokhföringsformatet **SIE-4**.
+Denna modul ansvarar för att läsa transaktionsdata från kalkylbladet (specifikt bladen `'1930'` och `'1630'`), gruppera dem i balanserade verifikationer (bunta), samt erbjuda export till det standardiserade svenska bokföringsformatet **SIE-4**.
 
 ---
 
-## 2. DOMÄNREGLER
-1. **Transaktionskällor:** 
-   - Läs data från ett definierat kalkylblad i det aktiva kalkylarkets dokument.
-   - Filtrera data baserat på valt räkenskapsår (Accounting Year).
-2. **Balanskrav:** 
-   - Varje enskilt verifikat (bunt av konteringsrader med samma verifikatsnummer) måste balansera, dvs. summan av debet (`SUM(debit)`) måste vara exakt lika med summan av kredit (`SUM(credit)`).
-   - Om ett verifikat är obalanserat ska gränssnittet varna användaren och blockera export.
-3. **SIE-4 Exportkrav:**
-   - Skapa giltiga SIE-4 rader med korrekta fältavgränsare och teckenkodning (CP437 / ISO-8859-1 kompatibel för svenska tecken Å, Ä, Ö).
-   - Inkludera nödvändiga SIE-huvuden som `#FLAGGA`, `#FORMAT`, `#GEN`, `#FNAMN`, `#RAR`, `#KONTO` och `#VER`.
+## 2. DOMÄNREGLER & SPECIFIKA KRAV
+1. **Transaktionskällor:**
+   - Data läses från de specifika kalkylbladen med namnen `'1930'` och `'1630'`.
+   - **Startrad:** Transaktionsdatan i båda bladen börjar alltid på **rad 9** (allt ovanför är sidhuvud/metadatablock).
+2. **Brutet Räkenskapsår:**
+   - Räkenskapsåret är brutet och löper från **1 juli till 30 juni** (t.ex. 2025-07-01 till 2026-06-30).
+3. **Temporär Buntning (Kolumner T, U, V):**
+   - När en transaktion "buntas" skapas ett internt `#VER`-block.
+   - Information om detta temporära block skrivs direkt till kalkylraden i **kolumnerna T, U och V** (kolumn 20, 21 och 22). 
+     - Kolumn T: Temporärt Verifikationsnummer / Batch-ID
+     - Kolumn U: Temporär Verifikationsbeskrivning
+     - Kolumn V: Temporärt Verifikationsdatum
+4. **Verifikationsnummer (Kolumn F) & Bekräftelse:**
+   - **V-numret (Kolumn F) tilldelas INTE vid buntning.** Under det temporära buntningsstadiet lämnas Kolumn F helt tom.
+   - Först när användaren klickar på **"Bekräfta export"** i gränssnittet slutförs processen:
+     - Systemet tilldelar permanenta, sekventiella verifikationsnummer i **Kolumn F** (kolumn 6).
+     - De temporära värdena i **kolumnerna T, U och V rensas** helt från kalkylbladet.
+5. **Balanskrav:**
+   - Varje färdigt verifikat måste balansera exakt (debet minus kredit ska vara noll) innan export tillåts.
 
 ---
 
-## 3. FUNKTIONELL SPECIFIKATION
+## 3. FUNKTIONELL SPECIFIKATION (SERVER-SIDE)
 
-### Server-side (`BatchLogic.js` / `BatchExport.js`)
-* `Batch_getTransactions(year)`: Läser in alla transaktioner för angivet år och returnerar en array av transaktionsobjekt.
-* `Batch_validateJournal(transactions)`: Kontrollerar att alla verifikat balanserar och uppfyller grundläggande valideringsregler.
-* `Batch_generateSieFile(year)`: Samlar kontoplan, ingående balanser samt årets verifikat och bygger en SIE-4 sträng. Returnerar strängen eller skapar en tillfällig länk/Drive-fil för nedladdning.
-
-### Client-side UI (`src/ui/` integrerat)
-* **Tabellvy:** Visar verifikat grupperade per nummer med visuell indikation på om de balanserar (grön/röd belysning).
-* **Års-väljare:** Dropdown-meny för att skifta mellan räkenskapsår.
-* **Export-knapp:** Trigger för att generera och ladda ner SIE-formatet.
+* `Batch_getTransactions(sheetName, fiscalYearStart)`: Läser in transaktioner från valt blad (`'1930'` eller `'1630'`) med start på rad 9, filtrerat enligt det brutna räkenskapsåret.
+* `Batch_temporaryGroup(rowIndices, batchDesc)`: Skapar ett temporärt `#VER`-block och sparar informationen i kolumnerna T, U, V för de valda raderna.
+* `Batch_confirmExportAndFinalize(sheetName, fiscalYearStart)`: Tilldelar permanenta sekventiella verifikationsnummer i Kolumn F för alla buntade rader, rensar kolumnerna T, U, V samt genererar SIE-4 exporten.
 
 ---
 
@@ -36,35 +39,43 @@ Denna modul ansvarar för att läsa transaktionsdata från kalkylbladet (t.ex. r
 
 ```javascript
 /**
- * Hämtar och strukturerar transaktionsrader från det aktiva kalkylarket.
- * @param {string} year - Räkenskapsåret som ska hämtas (t.ex. "2026").
- * @return {Array<Object>} Lista med strukturerade transaktionsrader.
+ * Hämtar transaktionsrader från rad 9 baserat på brutet räkenskapsår.
+ * @param {string} sheetName - Antingen '1930' eller '1630'.
+ * @param {number} startYear - Startåret för det brutna räkenskapsåret (t.ex. 2025 för 2025-07-01 till 2026-06-30).
+ * @return {Array<Object>} List av rader.
  */
-function Batch_getTransactions(year) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Verifikationer");
-  if (!sheet) {
-    throw new Error("Hittade inte bladet 'Verifikationer'.");
-  }
+function Batch_getTransactions(sheetName, startYear) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error("Hittade inte bladet: " + sheetName);
   
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0]; // Första raden som rubriker
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 9) return []; // Inget data ännu
+  
+  // Läs från rad 9 till sista raden
+  const range = sheet.getRange(9, 1, lastRow - 8, sheet.getLastColumn());
+  const values = range.getValues();
   const transactions = [];
   
-  // Rad-för-rad bearbetning (skippa rubriker)
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const transDate = new Date(row[1]); // Antag datum i kolumn B
+  const startDate = new Date(startYear, 6, 1); // 1 Juli
+  const endDate = new Date(startYear + 1, 5, 30, 23, 59, 59); // 30 Juni
+  
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i];
+    const rowNum = i + 9; // Faktiskt radnummer i Sheets
+    const transDate = new Date(row[1]); // Antag datum i kolumn B (index 1)
     
-    if (transDate.getFullYear().toString() === year) {
+    // Kontrollera om datumet faller inom det brutna räkenskapsåret
+    if (transDate >= startDate && transDate <= endDate) {
       transactions.push({
-        rowNum: i + 1,
-        id: row[0],         // Verifikationsnummer
-        date: row[1],       // Bokföringsdatum
-        desc: row[2],       // Beskrivning
-        account: row[3],    // Kontonummer
-        debit: Number(row[4] || 0),
-        credit: Number(row[5] || 0),
-        receiptLink: row[6] // Länk till Drive-kvitto (om det finns)
+        rowNum: rowNum,
+        tempId: row[19],      // Kolumn T (index 19)
+        tempDesc: row[20],    // Kolumn U (index 20)
+        tempDate: row[21],    // Kolumn V (index 21)
+        finalVerNum: row[5],  // Kolumn F (index 5)
+        account: row[2],      // Kolumn C (index 2)
+        debit: Number(row[3] || 0),   // Kolumn D
+        credit: Number(row[4] || 0)   // Kolumn E
       });
     }
   }
@@ -73,53 +84,48 @@ function Batch_getTransactions(year) {
 }
 
 /**
- * Genererar en SIE-4 kompatibel textsträng för valt år.
- * @param {string} year
- * @return {string} SIE-4 innehåll.
+ * Bekräftar exporten genom att tilldela sekventiella nummer till kolumn F och rensa T, U, V.
+ * @param {string} sheetName
+ * @param {number} startYear
  */
-function Batch_generateSieFile(year) {
-  const transactions = Batch_getTransactions(year);
+function Batch_confirmExportAndFinalize(sheetName, startYear) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error("Bladet saknas.");
   
-  // Gruppera efter verifikationsnummer
-  const journal = {};
-  transactions.forEach(t => {
-    if (!journal[t.id]) {
-      journal[t.id] = [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 9) return;
+  
+  // Hämta nästa tillgängliga permanenta verifikationsnummer från en inställning eller max i kolumn F
+  let nextVerNum = Batch_getNextVerificationNumber(sheet);
+  
+  const rangeTUV = sheet.getRange(9, 20, lastRow - 8, 3); // T, U, V
+  const rangeF = sheet.getRange(9, 6, lastRow - 8, 1);    // F
+  
+  const valuesTUV = rangeTUV.getValues();
+  const valuesF = rangeF.getValues();
+  
+  // Gruppera efter temporärt ID i T för att ge samma V-nummer till rader i samma bunt
+  const tempIdToFinalNum = {};
+  
+  for (let i = 0; i < valuesTUV.length; i++) {
+    const tempId = valuesTUV[i][0]; // Kolumn T
+    if (tempId) {
+      if (!tempIdToFinalNum[tempId]) {
+        tempIdToFinalNum[tempId] = nextVerNum;
+        nextVerNum++;
+      }
+      valuesF[i][0] = tempIdToFinalNum[tempId]; // Sätt permanent V-nummer i F
+      
+      // Rensar temporära värden i T, U, V
+      valuesTUV[i][0] = ""; // T
+      valuesTUV[i][1] = ""; // U
+      valuesTUV[i][2] = ""; // V
     }
-    journal[t.id].push(t);
-  });
-  
-  let sieString = "";
-  
-  // 1. Skriv standardhuvuden
-  sieString += "#FLAGGA 0\r\n";
-  sieString += "#FORMAT PC8\r\n";
-  sieString += `#GEN ${Utilities.formatDate(new Date(), "GMT+1", "yyyyMMdd")}\r\n`;
-  sieString += `#FNAMN "Bokförings-app SPA"\r\n`;
-  sieString += `#RAR 0 ${year}0101 ${year}1231\r\n`;
-  
-  // 2. Skriv kontolista (autogenererad från unika konton i transaktionerna)
-  const uniqueAccounts = [...new Set(transactions.map(t => t.account))];
-  uniqueAccounts.forEach(acc => {
-    sieString += `#KONTO ${acc} "Konto ${acc}"\r\n`;
-  });
-  
-  // 3. Skriv verifikat och dess transaktionsrader
-  for (const verId in journal) {
-    const lines = journal[verId];
-    const firstLine = lines[0];
-    const formattedDate = Utilities.formatDate(new Date(firstLine.date), "GMT+1", "yyyyMMdd");
-    
-    sieString += `#VER A ${verId} ${formattedDate} "${firstLine.desc}"\r\n{\r\n`;
-    
-    lines.forEach(line => {
-      const amount = line.debit - line.credit;
-      sieString += `  #TRANS ${line.account} {} ${amount.toFixed(2)}\r\n`;
-    });
-    
-    sieString += "}\r\n";
   }
   
-  return sieString;
+  // Spara ändringar i kalkylarket i en batch-operation
+  rangeF.setValues(valuesF);
+  rangeTUV.setValues(valuesTUV);
 }
 ```

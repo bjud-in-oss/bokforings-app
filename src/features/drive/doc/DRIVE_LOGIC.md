@@ -1,33 +1,27 @@
 # FEATURE LOGIC: VERIFIKAT & DRIVE INTEGRATION
 
 ## 1. ANSVARSOMRÅDE
-Denna modul hanterar kopplingen mellan fysiska verifikat (kvitton/fakturor sparade på Google Drive) och bokföringsraderna i kalkylbladet. Den tillhandahåller funktioner för att söka, lista och knyta dokumentlänkar till specifika transaktionsrader med optimal prestanda genom asynkron latladdning ("lazy loading").
+Denna modul hanterar kopplingen mellan transaktionsrader och digitala kvitton lagrade på Google Drive. Den erbjuder asynkron sökning, länkning, samt asynkron sökvägs-upplösning för att navigera och strukturera underlag i Drive-mappar.
 
 ---
 
-## 2. DOMÄNREGLER
-1. **Drive-koppling:**
-   - Varje verifikatrad i kalkylbladet kan ha en tillhörande Google Drive-länk (URL till förhandsvisning eller nedladdning).
-   - Användaren ska kunna öppna kvittot direkt från kalkylarket eller gränssnittet.
-2. **Asynkron Latladdning (Lazy Loading):**
-   - Hämta aldrig metadata för hundratals Drive-filer samtidigt vid initialisering. Detta orsakar time-outs i Google Apps Script och fördröjer renderingen av gränssnittet.
-   - Hämta kvittoförhandsvisningar eller filnamn asynkront först när en specifik rad expanderas eller väljs i gränssnittet.
-3. **Mappstruktur på Drive:**
-   - Appen bör automatiskt leta efter en specifik undermapp (t.ex. "Bokföring Kvitton") eller tillåta användaren att välja källmapp via en inbäddad filväljare (Google Picker).
+## 2. DOMÄNREGLER & SPECIFIKA KRAV
+
+### A. Asynkron Sökvägs-upplösning (Upward Hierarchy Traversal)
+* **Funktion:** `Drive_resolvePathAsynchronously(fileId)`
+* **Regel:** Funktionen ska ta ett fil-ID som indata, hämta Drive-filen och traversera **UPPÅT** (genom föräldramapparna) i katalogstrukturen tills den hittar en mapp vars namn består av exakt **fyra siffror** (vilket representerar år och månad, t.ex. `2507` för juli 2025).
+* **Returvärde:** Den ska bygga och returnera en formaterad sökvägssträng som representerar strukturen från den hittade ÅÅMM-mappen och nedåt till själva filen.
+  - *Exempel:* Om filen `kvitto_hyra.pdf` ligger i `Bokföring/2507/Fakturor/kvitto_hyra.pdf`, ska funktionen stanna vid `2507` och returnera `'2507/Fakturor/kvitto_hyra.pdf'`.
+
+### B. Optimal Lazy Loading
+* För att garantera snabba svarstider hämtas endast fil-ID och länk initialt. Detaljerade filnamn eller sökvägar beräknas via asynkrona anrop först när de efterfrågas på klientsidan (Lazy Loading).
 
 ---
 
-## 3. FUNKTIONELL SPECIFIKATION
+## 3. FUNKTIONELL SPECIFIKATION (SERVER-SIDE)
 
-### Server-side (`FilePicker.js`)
-* `Drive_getReceiptFolderFiles()`: Hämtar en begränsad lista av nyligen uppladdade kvitton/filer från Google Drive för snabbkoppling.
-* `Drive_linkReceiptToRow(rowNum, fileId)`: Skriver Drive-länken till den specifika kolumnen för angiven rad i kalkylbladet och returnerar den formaterade länken.
-* `Drive_getFileMetadata(fileId)`: Hämtar detaljerad metadata (namn, förhandsvisningsbild, storlek) för en enskild fil vid behov (on-demand).
-
-### Client-side UI (`src/ui/` integrerat)
-* **Kvitto-indikator:** Visar en ikon brevid transaktioner som har ett kopplat kvitto.
-* **Flytande förhandsvisning (Lazy Preview):** När användaren klickar på kvitto-ikonen, anropas `Drive_getFileMetadata` asynkront för att hämta och visa en tumnagelbild direkt i applikationen utan att ladda om hela sidan.
-* **Filväljar-modal:** En modal som låter användaren bläddra bland nyligen uppladdade filer på Drive och koppla dem till den valda transaktionsraden med ett klick.
+* `Drive_resolvePathAsynchronously(fileId)`: Traverserar uppåt i Drive-mappstrukturen för att hitta mappen med fyra siffror (`YYMM`), och bygger den relativa sökvägen.
+* `Drive_linkReceiptToRow(sheetName, rowNum, fileId)`: Sparar filens URL i kolumn H (eller motsvarande kvitto-kolumn) på angiven rad.
 
 ---
 
@@ -35,81 +29,53 @@ Denna modul hanterar kopplingen mellan fysiska verifikat (kvitton/fakturor spara
 
 ```javascript
 /**
- * Hämtar nyligen uppladdade filer från en specifik kvitto-mapp i Google Drive.
- * @return {Array<Object>} Lista med filnamn och id-nummer.
+ * Löser filens sökväg asynkront genom att traversera uppåt i föräldramapparna.
+ * Söker efter en mapp med exakt fyra siffror i namnet (YYMM, t.ex. "2507").
+ * @param {string} fileId - ID för filen i Google Drive.
+ * @return {string} Relativ formaterad sökväg (t.ex. "2507/undermapp/filnamn.pdf").
  */
-function Drive_getReceiptFolderFiles() {
-  const FOLDER_NAME = "Bokföring Kvitton";
-  let folder;
-  const folders = DriveApp.getFoldersByName(FOLDER_NAME);
-  
-  if (folders.hasNext()) {
-    folder = folders.next();
-  } else {
-    // Om mappen inte finns, skapa den i roten för att underlätta för användaren
-    folder = DriveApp.createFolder(FOLDER_NAME);
-  }
-  
-  const files = folder.getFiles();
-  const fileList = [];
-  let count = 0;
-  
-  // Begränsa till de 50 senaste filerna för att garantera snabb svarstid
-  while (files.hasNext() && count < 50) {
-    const file = files.next();
-    fileList.push({
-      id: file.getId(),
-      name: file.getName(),
-      url: file.getUrl(),
-      created: file.getDateCreated().getTime()
-    });
-    count++;
-  }
-  
-  // Sortera efter senaste först
-  return fileList.sort((a, b) => b.created - a.created);
-}
-
-/**
- * Kopplar en Drive-fil till en specifik rad i kalkylbladet.
- * @param {number} rowNum - Radnumret i kalkylarket som ska uppdateras.
- * @param {string} fileId - Unikt ID för Google Drive-filen.
- * @return {string} Den sparade länkadressen.
- */
-function Drive_linkReceiptToRow(rowNum, fileId) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Verifikationer");
-  if (!sheet) {
-    throw new Error("Hittade inte bladet 'Verifikationer'.");
-  }
-  
-  const file = DriveApp.getFileById(fileId);
-  const fileUrl = file.getUrl();
-  
-  // Antag att kolumn G (index 7) är kolumnen för kvitto-länkar
-  const RECEIPT_COLUMN = 7;
-  sheet.getRange(rowNum, RECEIPT_COLUMN).setValue(fileUrl);
-  
-  return fileUrl;
-}
-
-/**
- * Hämtar metadata för en enskild fil på ett lazy-loaded sätt.
- * @param {string} fileId - Fil-ID att hämta detaljer för.
- * @return {Object} Metadata och tumnagel (om tillgängligt).
- */
-function Drive_getFileMetadata(fileId) {
+function Drive_resolvePathAsynchronously(fileId) {
   try {
     const file = DriveApp.getFileById(fileId);
-    return {
-      id: fileId,
-      name: file.getName(),
-      size: file.getSize(),
-      mimeType: file.getMimeType(),
-      downloadUrl: file.getDownloadUrl(),
-      viewerUrl: file.getUrl()
-    };
-  } catch (error) {
-    throw new Error("Kunde inte hämta filens metadata. Kontrollera behörigheter: " + error.message);
+    const fileName = file.getName();
+    const pathParts = [fileName];
+    
+    let currentItem = file;
+    let foundYearMonthFolder = false;
+    
+    // Traversera uppåt i katalogstrukturen
+    while (!foundYearMonthFolder) {
+      const parents = currentItem.getParents();
+      
+      if (!parents.hasNext()) {
+        // Vi nådde roten utan att hitta en 4-siffrig mapp
+        break;
+      }
+      
+      const parentFolder = parents.next();
+      const parentName = parentFolder.getName();
+      pathParts.unshift(parentName); // Lägg till överst i sökvägen
+      
+      // Kontrollera om mappen består av exakt 4 siffror (t.ex. "2507")
+      const isFourDigits = /^\d{4}$/.test(parentName);
+      if (isFourDigits) {
+        foundYearMonthFolder = true;
+        break; // Avsluta loop
+      }
+      
+      currentItem = parentFolder;
+    }
+    
+    // Om vi hittade ÅÅMM-mappen, returnera den sammansatta sökvägen
+    // Annars returnerar vi en standard fallbacksökväg eller bara filnamnet
+    if (foundYearMonthFolder) {
+      return pathParts.join("/");
+    } else {
+      return "Osorterat/" + fileName;
+    }
+    
+  } catch (err) {
+    throw new Error("Kunde inte lösa sökvägen asynkront: " + err.message);
   }
 }
 ```

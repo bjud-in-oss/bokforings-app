@@ -1,32 +1,29 @@
 # FEATURE LOGIC: KONTERING & KONTOMALLAR (TEMPLATE ENGINE)
 
 ## 1. ANSVARSOMRÅDE
-Denna modul erbjuder ett interaktivt gränssnitt för att dynamiskt skapa nya verifikat och rader i kalkylbladet. Den tillhandahåller även smart automatisk kontering mot kalkylarkets inbyggda kontoplan samt färdiga konteringsmallar (t.ex. för återkommande händelser som hyra, mobilfaktura, etc.).
+Denna modul erbjuder ett interaktivt gränssnitt för att dynamiskt kontera och skapa nya verifikat. Den tillhandahåller även smart automatisk kontering mot kalkylarkets inbyggda kontoplan samt färdiga konteringsmallar med inbyggt stöd för momsdetektering och extern löneimport.
 
 ---
 
-## 2. DOMÄNREGLER
-1. **Dynamisk radtilldelning:**
-   - Gränssnittet tillåter användaren att dynamiskt lägga till, flytta eller ta bort rader i en pågående verifikation innan den sparas till kalkylbladet.
-2. **Autofyll & Sök mot Kontoplan:**
-   - När användaren påbörjar inmatning av ett kontonummer (eller kontonamn) ska systemet automatiskt söka mot kalkylarkets kontoplan och föreslå matchningar.
-3. **Konteringsmallar:**
-   - Sparade mallar ska definiera vilka konton som ska debiteras och krediteras för en viss typ av transaktion.
-   - När en mall väljs ska det nya verifikationsformuläret förhandskonteras automatiskt, så att användaren endast behöver mata in belopp och datum.
+## 2. DOMÄNREGLER & SPECIFIKA KRAV
+
+### A. Momsdetektering (Moms-radar för Konto 2641)
+* **Regel:** Om ett konteringsförslag eller en transaktionsrad innehåller konto **2641** (ingående moms), ska systemets "Moms-radar" aktiveras.
+* **Logik:** Systemet beräknar mellanskillnaden mellan Debet och Kredit (`Debet - Kredit`) för just denna rad och sparar automatiskt detta beräknade momsvärde i **Kolumn Q** (index 17, dvs. kolumnen för momsbelopp).
+
+### B. Dynamisk Import av Lönespecifikationer (Kolumn H)
+* **Regel:** Systemet övervakar den länkade filen i **Kolumn H** (dokumentlänken).
+* **Logik:**
+  - Om länken i Kolumn H leder till ett externt **Google Kalkylark (spreadsheet)**, ska systemet **INTE** visa den standardiserade verifikationsmallen.
+  - Istället ska backend öppna det externa kalkylarket, hämta data från fliken namngiven **'Lön'** inom cellområdet **`B9:F70`**, och parsa detta direkt som en lönespecifikation för att generera färdiga konteringsförslag (lön, skatt, arbetsgivaravgifter).
 
 ---
 
-## 3. FUNKTIONELL SPECIFIKATION
+## 3. FUNKTIONELL SPECIFIKATION (SERVER-SIDE)
 
-### Server-side (`TemplateEngine.js`)
-* `Template_getAccountPlan()`: Hämtar hela listan med konton (nummer + namn) från bladet "Kontoplan" i det aktiva kalkylarket.
-* `Template_getTemplates()`: Hämtar tillgängliga bokföringsmallar (t.ex. "Inköp kontorsmaterial", "Kundfaktura", "Egen insättning").
-* `Template_saveJournalEntry(entry)`: Tar emot en sammansatt verifikationspost (med datum, beskrivning och en array av konteringsrader) från klientsidan, verifierar balansen och sparar raderna sekventiellt i kalkylbladet "Verifikationer".
-
-### Client-side UI (`src/ui/` integrerat)
-* **Verifikations-skapare:** Ett dynamiskt formulär med möjlighet att lägga till obegränsat antal debet/kredit-rader.
-* **Typ-ahead sökning:** Snabbsökning i realtid bland konton med hjälp av lokalt lagrad kontoplan (hämtad en gång per session för högsta prestanda).
-* **Mallväljare:** En snabbvalspanel för att ladda förinställda kontomallar direkt in i skaparen.
+* `Template_getAccountPlan()`: Hämtar tillgängliga konton från bladet "Kontoplan" i det aktiva dokumentet.
+* `Template_parseExternalPayslip(spreadsheetUrl)`: Öppnar det externa kalkylarket via URL/ID, läser tabellen `'Lön'!B9:F70` och strukturerar datan till ett färdigt bokföringsunderlag för löner.
+* `Template_saveJournalEntryWithVat(entry, sheetName)`: Sparar konteringsraderna sekventiellt till målbladet, och skriver automatiskt differensen till Kolumn Q om konto 2641 detekteras.
 
 ---
 
@@ -34,81 +31,74 @@ Denna modul erbjuder ett interaktivt gränssnitt för att dynamiskt skapa nya ve
 
 ```javascript
 /**
- * Hämtar den aktuella kontoplanen från kalkylbladet "Kontoplan".
- * @return {Array<Object>} Lista med konton.
+ * Kontrollerar rader och sparar dem, med momsberäkning till Kolumn Q (index 17) för konto 2641.
+ * @param {Object} entry - Innehåller rows, date, desc etc.
+ * @param {string} sheetName - t.ex. '1930' eller '1630'.
  */
-function Template_getAccountPlan() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Kontoplan");
-  if (!sheet) {
-    // Returnera en grundläggande standardkontoplan om bladet saknas
-    return [
-      { code: "1930", name: "Företagskonto / Bank" },
-      { code: "2641", name: "Debiterad ingående moms" },
-      { code: "3001", name: "Försäljning varor" },
-      { code: "6071", name: "Repræsentation" }
-    ];
-  }
+function Template_saveJournalEntryWithVat(entry, sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error("Bladet saknas.");
   
-  const data = sheet.getDataRange().getValues();
-  const accounts = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (row[0]) {
-      accounts.push({
-        code: row[0].toString(),
-        name: row[1] ? row[1].toString() : ""
-      });
+  const lastRow = sheet.getLastRow();
+  const targetRow = lastRow + 1;
+  
+  entry.rows.forEach((row, idx) => {
+    const currentRowNum = targetRow + idx;
+    
+    // Standardfält
+    sheet.getRange(currentRowNum, 2).setValue(entry.date); // Kolumn B
+    sheet.getRange(currentRowNum, 3).setValue(entry.desc); // Kolumn C
+    sheet.getRange(currentRowNum, 4).setValue(row.account); // Kolumn D
+    sheet.getRange(currentRowNum, 5).setValue(Number(row.debit || 0)); // Kolumn E
+    sheet.getRange(currentRowNum, 6).setValue(Number(row.credit || 0)); // Kolumn F
+    
+    // MOMS-RADAR: Om kontot är 2641, spara debet - kredit i Kolumn Q (kolumn 17)
+    if (row.account === "2641") {
+      const vatDifference = Number(row.debit || 0) - Number(row.credit || 0);
+      sheet.getRange(currentRowNum, 17).setValue(vatDifference); // Kolumn Q (index 17)
     }
-  }
-  return accounts;
+  });
 }
 
 /**
- * Sparar en komplett verifikationspost i kalkylbladet.
- * @param {Object} entry - Innehåller date, desc, rows (array med {account, debit, credit})
- * @return {boolean} True om sparandet lyckades.
+ * Parsar en extern lönespecifikation om länken i Kolumn H är ett Google Kalkylark.
+ * @param {string} spreadsheetUrl - URL till det externa lönekalkylarket.
+ * @return {Array<Object>} Konteringsrader skapade utifrån lönespecifikationen.
  */
-function Template_saveJournalEntry(entry) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Verifikationer");
-  if (!sheet) {
-    throw new Error("Hittade inte bladet 'Verifikationer'.");
+function Template_parseExternalPayslip(spreadsheetUrl) {
+  try {
+    const extSs = SpreadsheetApp.openByUrl(spreadsheetUrl);
+    const lonSheet = extSs.getSheetByName("Lön");
+    if (!lonSheet) {
+      throw new Error("Kunde inte hitta fliken 'Lön' i det länkade kalkylarket.");
+    }
+    
+    // Hämta cellområdet B9:F70
+    const values = lonSheet.getRange("B9:F70").getValues();
+    const suggestedJournalRows = [];
+    
+    // Iterera över löneraderna och parsa konton och belopp
+    for (let i = 0; i < values.length; i++) {
+      const row = values[i];
+      const accountCode = row[0]; // Kolumn B i ursprungliga fliken
+      const accountName = row[1]; // Kolumn C
+      const debitValue = Number(row[3] || 0);  // Kolumn E
+      const creditValue = Number(row[4] || 0); // Kolumn F
+      
+      if (accountCode && (debitValue > 0 || creditValue > 0)) {
+        suggestedJournalRows.push({
+          account: accountCode.toString(),
+          name: accountName,
+          debit: debitValue,
+          credit: creditValue
+        });
+      }
+    }
+    
+    return suggestedJournalRows;
+  } catch (err) {
+    throw new Error("Löneimport misslyckades: " + err.message);
   }
-  
-  // 1. Validera att posten balanserar före lagring
-  let sumDebit = 0;
-  let sumCredit = 0;
-  entry.rows.forEach(r => {
-    sumDebit += Number(r.debit || 0);
-    sumCredit += Number(r.credit || 0);
-  });
-  
-  if (Math.abs(sumDebit - sumCredit) > 0.01) {
-    throw new Error("Transaktionen balanserar inte! Debet: " + sumDebit + ", Kredit: " + sumCredit);
-  }
-  
-  // 2. Beräkna nästa tillgängliga verifikationsnummer
-  const lastRow = sheet.getLastRow();
-  let nextVerId = 1;
-  if (lastRow > 1) {
-    const lastVerId = sheet.getRange(lastRow, 1).getValue();
-    nextVerId = Number(lastVerId || 0) + 1;
-  }
-  
-  // 3. Skriv rader till kalkylbladet i en och samma operation (Batching för prestanda)
-  const rowsToWrite = [];
-  entry.rows.forEach(r => {
-    rowsToWrite.push([
-      nextVerId,
-      entry.date,
-      entry.desc,
-      r.account,
-      Number(r.debit || 0),
-      Number(r.credit || 0),
-      "" // Tom kolumn för kvitto-länk (fylls via Drive feature)
-    ]);
-  });
-  
-  sheet.getRange(lastRow + 1, 1, rowsToWrite.length, 7).setValues(rowsToWrite);
-  return true;
 }
 ```
