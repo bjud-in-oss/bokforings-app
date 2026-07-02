@@ -1,39 +1,43 @@
 # FEATURE LOGIC: KONTERING & KONTOMALLAR (TEMPLATE ENGINE)
 
 ## 1. ANSVARSOMRÅDE
-Denna modul erbjuder ett interaktivt gränssnitt för att dynamiskt kontera och skapa nya verifikat. Den tillhandahåller även smart automatisk kontering mot kalkylarkets inbyggda kontoplan samt färdiga konteringsmallar med inbyggt stöd för momsdetektering och extern löneimport.
+Denna modul erbjuder ett interaktivt gränssnitt för att dynamiskt kontera och skapa nya verifikat. Genom att integrera tätt med Google Kalkylarks dolda formelmotor slipper backend bygga egna konteringsförslag från grunden. Istället fungerar kalkylarket som den primära kalkyleringsmotorn.
 
 ---
 
 ## 2. DOMÄNREGLER & SPECIFIKA KRAV
 
-### A. Momsdetektering (Moms-radar för Konto 2641)
-* **Regel:** Om ett konteringsförslag eller en transaktionsrad innehåller konto **2641** (ingående moms), ska systemets "Moms-radar" aktiveras.
-* **Logik:** Systemet beräknar mellanskillnaden mellan Debet och Kredit (`Debet - Kredit`) för just denna rad och sparar automatiskt detta beräknade momsvärde i **Kolumn Q** (index 17, dvs. kolumnen för momsbelopp).
+### A. Den Formelstyrda Konteringsmotorn (A1 / A3:D6)
+För att hålla backend fri från komplex bokföringslogik används kalkylarkets inbyggda matriser på rad 2 som beräkningsmotor:
+* **Val av Kategori:** När en transaktion granskas, sätter GAS-backend ett `?` i kolumn F på transaktionsraden samt skriver den valda bokföringskategorin (börjar alltid med understreck, t.ex. `_Hyra`) till cell **A1**.
+* **Datavalidering live:** Cell `A1` styrs av datavalidering live via bladet **'Vald kategori'** (intervall `$B:$B` för blad `1930`, `$A:$A` för blad `1630`). Detta blad filtrerar automatiskt fram rätt konteringsguider från `0000_autok` baserat på om den markerade radens beloppstecken (`SIGN`) är positivt eller negativt.
+* **Underlagsgenerering:** Så fort `A1` uppdateras spottar kalkylarkets dolda matrisformler i rad 2 automatiskt ut det färdiga, balanserade bokföringsunderlaget i cellområdet **`A3:D6`** (Konto, Namn, Debet, Kredit).
+* **Förenklad backend:** GAS behöver enbart *läsa* de genererade raderna från **`A3:D6`** för att bygga sitt SIE-block eller verifikat.
 
-### B. Dynamisk Import av Lönespecifikationer (Kolumn H)
-* **Regel:** Systemet övervakar den länkade filen i **Kolumn H** (dokumentlänken).
-* **Logik:**
-  - Om länken i Kolumn H leder till ett externt **Google Kalkylark (spreadsheet)**, ska systemet **INTE** visa den standardiserade verifikationsmallen.
-  - Istället ska backend öppna det externa kalkylarket, hämta data från fliken namngiven **'Lön'** inom cellområdet **`B9:F70`**, och parsa detta direkt som en lönespecifikation för att generera färdiga konteringsförslag (lön, skatt, arbetsgivaravgifter).
-
-### C. Intelligent Auto-Kontering (Beskrivningsmatchning)
+### B. Intelligent Auto-Kontering (Beskrivningsmatchning)
 * **Regel:** Automatiskt igenkännande av transaktionsmönster för att underlätta manuell kontering.
-* **Logik:** Om den valda radens `'Beskrivning'` (Kolumn C) matchar kända nyckelord (t.ex. "Hyra", "Adobe", "Google Cloud", "Lön") eller överensstämmer med tidigare bokförda rader, ska systemet automatiskt föreslå och ladda in rätt konteringsmall när fliken `'Kontering'` öppnas. Användaren ska inte behöva välja mallen manuellt från dropdown-menyn.
+* **Logik:** Om den valda radens `'Beskrivning'` (Kolumn C) matchar kända nyckelord (t.ex. "Hyra", "Adobe", "Google Cloud", "Lön") eller överensstämmer med tidigare bokförda rader, ska systemet automatiskt föreslå och ladda in rätt konteringsmall till cell `A1` när fliken `'Kontering'` öppnas. Användaren ska inte behöva klicka på dropdown-menyn manuellt.
 
-### D. Realtidsvalidering av Balans (Buntningsspärr)
+### C. Realtidsvalidering av Balans (Buntningsspärr)
 * **Regel:** Garantera att inga obalanserade verifikat sparas i kalkylbladet.
 * **Logik:** Konteringsmallen i frontend ska ha en dynamisk tabell-footer som i realtid beräknar och visar summan för total Debet, total Kredit samt differensen (`Debet - Kredit`). 
   - Om differensen **inte är exakt noll**, ska knappen för att spara eller buntas förbli **helt inaktiverad (disabled)**.
   - Ett tydligt, rött varningsmeddelande ska visas bredvid knappen med den exakta obalansen (t.ex. *"Obalans: Debet och Kredit diffar med -150.00 kr"*).
 
+### D. Momsdetektering (Moms-radar för Konto 2641)
+* **Regel:** Om ett konteringsförslag innehåller konto **2641** (ingående moms), aktiveras systemets moms-radar.
+* **Logik:** Mellanskillnaden (`Debet - Kredit`) för momskontot beräknas och sparas automatiskt i **Kolumn Q** (momsbelopp, index 17) för att säkra momsredovisningsunderlaget.
+
+### E. Dynamisk Import av Lönespecifikationer (Kolumn H)
+* **Regel:** Om dokumentlänken i **Kolumn H** leder till ett externt Google Kalkylark med fliken `'Lön'`, ska systemet parsa cellområdet **`B9:F70`** i det externa arket för att generera lön, källskatt och arbetsgivaravgifter.
+
 ---
 
 ## 3. FUNKTIONELL SPECIFIKATION (SERVER-SIDE)
 
+* `Template_loadTemplateForTransaction(sheetName, rowNum, category)`: Skriver `?` till radens kolumn F samt skriver `category` till cell `A1`. Läser sedan in det genererade underlaget från `A3:D6` och returnerar det till UI:t.
 * `Template_getAccountPlan()`: Hämtar tillgängliga konton från bladet "Kontoplan" i det aktiva dokumentet.
 * `Template_parseExternalPayslip(spreadsheetUrl)`: Öppnar det externa kalkylarket via URL/ID, läser tabellen `'Lön'!B9:F70` och strukturerar datan till ett färdigt bokföringsunderlag för löner.
-* `Template_saveJournalEntryWithVat(entry, sheetName)`: Sparar konteringsraderna sekventiellt till målbladet, och skriver automatiskt differensen till Kolumn Q om konto 2641 detekteras.
 
 ---
 
@@ -41,74 +45,45 @@ Denna modul erbjuder ett interaktivt gränssnitt för att dynamiskt kontera och 
 
 ```javascript
 /**
- * Kontrollerar rader och sparar dem, med momsberäkning till Kolumn Q (index 17) för konto 2641.
- * @param {Object} entry - Innehåller rows, date, desc etc.
- * @param {string} sheetName - t.ex. '1930' eller '1630'.
+ * Laddar en konteringsmall genom att skriva kategori till A1 och läsa A3:D6.
+ * @param {string} sheetName - '1930' eller '1630'
+ * @param {number} rowNum - Raden som markeras
+ * @param {string} category - t.ex. '_Hyra'
+ * @return {Array<Object>} Underlaget från A3:D6
  */
-function Template_saveJournalEntryWithVat(entry, sheetName) {
+function Template_loadTemplateForTransaction(sheetName, rowNum, category) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) throw new Error("Bladet saknas.");
+  if (!sheet) throw new Error("Bladet saknas: " + sheetName);
   
-  const lastRow = sheet.getLastRow();
-  const targetRow = lastRow + 1;
+  // Sätt markering "?" i Kolumn F
+  sheet.getRange(rowNum, 6).setValue("?");
   
-  entry.rows.forEach((row, idx) => {
-    const currentRowNum = targetRow + idx;
+  // Skriv vald kategori till A1 för att aktivera formelmotorn
+  sheet.getRange("A1").setValue(category);
+  
+  SpreadsheetApp.flush(); // Tvinga kalkylarket att beräkna formlerna
+  
+  // Läs bokföringsunderlaget från A3:D6
+  const values = sheet.getRange("A3:D6").getValues();
+  const journalRows = [];
+  
+  for (let i = 0; i < values.length; i++) {
+    const accountCode = values[i][0];
+    const accountName = values[i][1];
+    const debit = Number(values[i][2] || 0);
+    const credit = Number(values[i][3] || 0);
     
-    // Standardfält
-    sheet.getRange(currentRowNum, 2).setValue(entry.date); // Kolumn B
-    sheet.getRange(currentRowNum, 3).setValue(entry.desc); // Kolumn C
-    sheet.getRange(currentRowNum, 4).setValue(row.account); // Kolumn D
-    sheet.getRange(currentRowNum, 5).setValue(Number(row.debit || 0)); // Kolumn E
-    sheet.getRange(currentRowNum, 6).setValue(Number(row.credit || 0)); // Kolumn F
-    
-    // MOMS-RADAR: Om kontot är 2641, spara debet - kredit i Kolumn Q (kolumn 17)
-    if (row.account === "2641") {
-      const vatDifference = Number(row.debit || 0) - Number(row.credit || 0);
-      sheet.getRange(currentRowNum, 17).setValue(vatDifference); // Kolumn Q (index 17)
+    if (accountCode) {
+      journalRows.push({
+        account: accountCode.toString(),
+        name: accountName,
+        debit: debit,
+        credit: credit
+      });
     }
-  });
-}
-
-/**
- * Parsar en extern lönespecifikation om länken i Kolumn H är ett Google Kalkylark.
- * @param {string} spreadsheetUrl - URL till det externa lönekalkylarket.
- * @return {Array<Object>} Konteringsrader skapade utifrån lönespecifikationen.
- */
-function Template_parseExternalPayslip(spreadsheetUrl) {
-  try {
-    const extSs = SpreadsheetApp.openByUrl(spreadsheetUrl);
-    const lonSheet = extSs.getSheetByName("Lön");
-    if (!lonSheet) {
-      throw new Error("Kunde inte hitta fliken 'Lön' i det länkade kalkylarket.");
-    }
-    
-    // Hämta cellområdet B9:F70
-    const values = lonSheet.getRange("B9:F70").getValues();
-    const suggestedJournalRows = [];
-    
-    // Iterera över löneraderna och parsa konton och belopp
-    for (let i = 0; i < values.length; i++) {
-      const row = values[i];
-      const accountCode = row[0]; // Kolumn B i ursprungliga fliken
-      const accountName = row[1]; // Kolumn C
-      const debitValue = Number(row[3] || 0);  // Kolumn E
-      const creditValue = Number(row[4] || 0); // Kolumn F
-      
-      if (accountCode && (debitValue > 0 || creditValue > 0)) {
-        suggestedJournalRows.push({
-          account: accountCode.toString(),
-          name: accountName,
-          debit: debitValue,
-          credit: creditValue
-        });
-      }
-    }
-    
-    return suggestedJournalRows;
-  } catch (err) {
-    throw new Error("Löneimport misslyckades: " + err.message);
   }
+  
+  return journalRows;
 }
 ```
