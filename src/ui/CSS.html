@@ -1,3 +1,230 @@
 <!-- CSS.HTML - Styling för applikationen -->
 <style>
+  /* Reset & Typography */
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  body, html {
+    height: 100%;
+    background-color: #f8f9fa;
+    color: #212529;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  /* App Layout Container */
+  #app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* Global Header - Industrial Charcoal Palette */
+  #global-header {
+    background-color: #212529;
+    color: #f8f9fa;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 2px solid #343a40;
+    flex-shrink: 0;
+  }
+
+  .header-controls {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .control-group label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #adb5bd;
+    font-weight: 600;
+  }
+
+  /* Compact dropdown styles */
+  select {
+    background-color: #343a40;
+    color: #f8f9fa;
+    border: 1px solid #495057;
+    padding: 4px 24px 4px 8px;
+    font-size: 11px;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s ease-in-out;
+  }
+
+  select:focus {
+    border-color: #0d6efd;
+  }
+
+  /* Industrial Buttons */
+  button {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.1s ease;
+    border: 1px solid transparent;
+  }
+
+  .btn-secondary {
+    background-color: #495057;
+    color: #f8f9fa;
+    border: 1px solid #6c757d;
+  }
+
+  .btn-secondary:hover {
+    background-color: #6c757d;
+  }
+
+  .btn-secondary:active {
+    background-color: #343a40;
+  }
+
+  /* Tab Navigation - Functional minimalist tabs */
+  #tab-navigation {
+    display: flex;
+    background-color: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
+  }
+
+  .tab-link {
+    background: none;
+    border: none;
+    border-right: 1px solid #dee2e6;
+    padding: 10px 16px;
+    font-size: 12px;
+    color: #495057;
+    font-weight: 500;
+    transition: all 0.1s ease;
+    border-bottom: 2px solid transparent;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .tab-link:hover {
+    background-color: #f1f3f5;
+    color: #212529;
+  }
+
+  .tab-link.active {
+    background-color: #ffffff;
+    color: #212529;
+    border-bottom: 2px solid #212529;
+    font-weight: 600;
+  }
+
+  /* Main Workspace and Split View */
+  #main-content {
+    flex-grow: 1;
+    display: flex;
+    overflow: hidden;
+    background-color: #ffffff;
+  }
+
+  #split-view-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* Panels */
+  .split-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+  }
+
+  #panel-left {
+    width: 40%;
+    min-width: 150px;
+    border-right: 1px solid #dee2e6;
+  }
+
+  #panel-right {
+    flex-grow: 1;
+    min-width: 150px;
+  }
+
+  /* Resizer splitting bar */
+  #ui-resizer {
+    width: 6px;
+    background-color: #e9ecef;
+    cursor: col-resize;
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease;
+  }
+
+  #ui-resizer:hover, #ui-resizer.active {
+    background-color: #adb5bd;
+  }
+
+  /* Panel Header & Body Structuring */
+  .panel-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 38px;
+    flex-shrink: 0;
+  }
+
+  .panel-header h2 {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #495057;
+  }
+
+  .panel-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex-grow: 1;
+  }
+
+  /* Tab-contents inside right panel */
+  .tab-content {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+  }
+
+  .tab-content.active {
+    display: flex;
+  }
+
+  /* Aesthetic Elements & Utility classes */
+  .placeholder-text {
+    color: #868e96;
+    font-style: italic;
+    text-align: center;
+    margin-top: 40px;
+  }
 </style>

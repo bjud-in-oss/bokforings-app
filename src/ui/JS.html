@@ -1,3 +1,138 @@
 <!-- JS.HTML - Klientside JavaScript-logik -->
 <script>
+  // Vänta tills DOM har laddats helt
+  document.addEventListener("DOMContentLoaded", function() {
+    UI_setupTabs();
+    UI_setupResizer();
+    UI_setupCloseHandlers();
+  });
+
+  /**
+   * Hanterar flik-växling i gränssnittet.
+   */
+  function UI_setupTabs() {
+    const tabLinks = document.querySelectorAll(".tab-link");
+    const tabContents = document.querySelectorAll(".tab-content");
+
+    tabLinks.forEach(function(link) {
+      link.addEventListener("click", function() {
+        const targetTabId = this.getAttribute("data-tab");
+
+        // Ta bort 'active' klass från alla länkar och flikar
+        tabLinks.forEach(l => l.classList.remove("active"));
+        tabContents.forEach(c => c.classList.remove("active"));
+
+        // Lägg till 'active' på klickad länk och matchande flikinnehåll
+        this.classList.add("active");
+        const activeContent = document.getElementById(targetTabId);
+        if (activeContent) {
+          activeContent.classList.add("active");
+        }
+      });
+    });
+  }
+
+  /**
+   * Hanterar dra-och-släpp resizer för att ändra storlek på split-view paneler.
+   */
+  function UI_setupResizer() {
+    const container = document.getElementById("split-view-container");
+    const leftPanel = document.getElementById("panel-left");
+    const resizer = document.getElementById("ui-resizer");
+
+    if (!container || !leftPanel || !resizer) return;
+
+    let isDragging = false;
+
+    // Starta dragning på mus- eller touchevents
+    resizer.addEventListener("mousedown", startResize);
+    resizer.addEventListener("touchstart", startResize, { passive: true });
+
+    function startResize(e) {
+      isDragging = true;
+      resizer.classList.add("active");
+      
+      // Lägg till globala lyssnare på dokumentet för att hänga med även utanför resizern
+      document.addEventListener("mousemove", resize);
+      document.addEventListener("mouseup", stopResize);
+      document.addEventListener("touchmove", resize, { passive: false });
+      document.addEventListener("touchend", stopResize);
+      
+      // Undvik textselektion vid dragning
+      if (e.cancelable) e.preventDefault();
+    }
+
+    function resize(e) {
+      if (!isDragging) return;
+
+      // Hämta X-koordinat från mus eller touch
+      let clientX;
+      if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+      } else {
+        clientX = e.clientX;
+      }
+
+      // Hämta containerns gränser
+      const containerRect = container.getBoundingClientRect();
+      const relativeX = clientX - containerRect.left;
+
+      // Procentuell beräkning
+      let percentWidth = (relativeX / containerRect.width) * 100;
+
+      // Säkerhetsgränser (min 20%, max 80%)
+      if (percentWidth < 20) percentWidth = 20;
+      if (percentWidth > 80) percentWidth = 80;
+
+      // Justera panelstorlek via requestAnimationFrame för silkeslen rendering
+      window.requestAnimationFrame(function() {
+        leftPanel.style.width = percentWidth + "%";
+      });
+
+      if (e.cancelable) e.preventDefault();
+    }
+
+    function stopResize() {
+      isDragging = false;
+      resizer.classList.remove("active");
+      
+      // Ta bort globala lyssnare
+      document.removeEventListener("mousemove", resize);
+      document.removeEventListener("mouseup", stopResize);
+      document.removeEventListener("touchmove", resize);
+      document.removeEventListener("touchend", stopResize);
+    }
+  }
+
+  /**
+   * Hanterar stängning av sidopanelen (Knapp och Escape-tangent).
+   */
+  function UI_setupCloseHandlers() {
+    const closeBtn = document.getElementById("btn-close-sidebar");
+
+    // Knapp-stängning
+    if (closeBtn) {
+      closeBtn.addEventListener("click", function() {
+        UI_closeSidebar();
+      });
+    }
+
+    // Escape-stängning (Kritiskt för frictionless UX i Sheets)
+    document.addEventListener("keydown", function(e) {
+      if (e.key === "Escape") {
+        UI_closeSidebar();
+      }
+    });
+  }
+
+  /**
+   * Säker stängnings-anrop via Google Apps Script API.
+   */
+  function UI_closeSidebar() {
+    if (typeof google !== "undefined" && google.script && google.script.host) {
+      google.script.host.close();
+    } else {
+      console.log("google.script.host.close() anropades (simulering utanför Sheets).");
+    }
+  }
 </script>
