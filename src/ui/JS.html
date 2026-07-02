@@ -1,10 +1,14 @@
 <!-- JS.HTML - Klientside JavaScript-logik -->
 <script>
+  // Globalt tillståndsobjekt för gränssnittet (UI_STATE)
+  window.UI_STATE = {};
+
   // Vänta tills DOM har laddats helt
   document.addEventListener("DOMContentLoaded", function() {
     UI_setupTabs();
     UI_setupResizer();
     UI_setupCloseHandlers();
+    UI_loadInitialState();
   });
 
   /**
@@ -134,5 +138,65 @@
     } else {
       console.log("google.script.host.close() anropades (simulering utanför Sheets).");
     }
+  }
+
+  /**
+   * Laddar det initiala tillståndet från backend och uppdaterar gränssnittet.
+   */
+  function UI_loadInitialState() {
+    if (typeof google !== "undefined" && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(state) {
+          window.UI_STATE = state;
+          UI_updateHeaderControls(state);
+        })
+        .withFailureHandler(function(err) {
+          console.error("Fel vid laddning av initialt tillstånd:", err);
+          alert("Kritiskt initieringsfel: " + err.message);
+        })
+        .Batch_getInitialState();
+    } else {
+      console.log("google.script.run saknas (simulering).");
+      // Fallback/Simulering för lokal utvecklingsmiljö
+      const mockState = {
+        sheet: "1930",
+        activeRow: 15,
+        currentYear: "2025/2026",
+        availableYears: ["2023/2024", "2024/2025", "2025/2026"]
+      };
+      window.UI_STATE = mockState;
+      setTimeout(() => UI_updateHeaderControls(mockState), 500);
+    }
+  }
+
+  /**
+   * Uppdaterar dropdown-menyerna i headern med data från det tillståndet.
+   * @param {Object} state - Tillståndet från backend.
+   */
+  function UI_updateHeaderControls(state) {
+    const sheetSelect = document.getElementById("select-sheet");
+    const yearSelect = document.getElementById("select-year");
+
+    if (sheetSelect && state.sheet) {
+      sheetSelect.value = state.sheet;
+    }
+
+    if (yearSelect && state.availableYears && state.currentYear) {
+      // Töm befintliga alternativ
+      yearSelect.innerHTML = "";
+      
+      // Bygg nya alternativ
+      state.availableYears.forEach(function(year) {
+        const option = document.createElement("option");
+        option.value = year;
+        option.textContent = year;
+        if (year === state.currentYear) {
+          option.selected = true;
+        }
+        yearSelect.appendChild(option);
+      });
+    }
+    
+    console.log("Initialt tillstånd laddat framgångsrikt:", state);
   }
 </script>
