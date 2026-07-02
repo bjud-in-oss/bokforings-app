@@ -1,12 +1,6 @@
 // INIT.JS - Huvudinitiering och globala funktioner för Google Apps Script
 // Prefix: Init_
 
-// ÄNDRA FRÅN:
-return HtmlService.createTemplateFromFile('GUI').evaluate();
-
-// TILL:
-return HtmlService.createTemplateFromFile('src/ui/GUI').evaluate();
-
 /**
  * Standard trigger onOpen i Google Kalkylark som bygger den anpassade menyn.
  */
@@ -28,7 +22,7 @@ function Init_onOpen() {
  * Öppnar programmets sidopanel (Sidebar).
  */
 function Init_showSidebar() {
-  const html = HtmlService.createTemplateFromFile("GUI")
+  const html = HtmlService.createTemplateFromFile('src/ui/GUI')
     .evaluate()
     .setTitle("Bokförings-app SPA")
     .setSandboxMode(HtmlService.SandboxMode.IFRAME);
