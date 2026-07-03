@@ -25,8 +25,10 @@ function Init_showSidebar() {
   const html = HtmlService.createTemplateFromFile('src/ui/GUI')
     .evaluate()
     .setTitle("Bokförings-app SPA")
-    .setSandboxMode(HtmlService.SandboxMode.IFRAME);
-  SpreadsheetApp.getUi().showSidebar(html);
+    .setSandboxMode(HtmlService.SandboxMode.IFRAME)
+    .setWidth(1400)
+    .setHeight(800);
+  SpreadsheetApp.getUi().showModelessDialog(html, "Bokförings-app SPA");
 }
 
 /**
