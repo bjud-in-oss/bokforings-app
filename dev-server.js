@@ -35,5 +35,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Bokförings-app server running on port ${PORT}`);
+  console.log(`Bokförings-app development server running on port ${PORT}`);
 });

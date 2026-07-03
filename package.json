@@ -2,11 +2,11 @@
   "name": "bokforings-app",
   "version": "1.0.0",
   "description": "Google Apps Script Bokföringsapplikation",
-  "main": "server.js",
+  "main": "dev-server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "node dev-server.js",
+    "dev": "node dev-server.js",
     "build": "echo 'No build step required'",
     "lint": "echo 'No linting required'"
   },

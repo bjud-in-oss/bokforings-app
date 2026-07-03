@@ -1,0 +1,9 @@
+# Ignore all files by default
+**/*
+
+# Except the Apps Script source files and config
+!appsscript.json
+!src/**/*.js
+!src/**/*.gs
+!src/**/*.html
+!src/**/*.json
