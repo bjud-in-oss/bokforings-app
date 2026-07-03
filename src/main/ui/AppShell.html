@@ -1,0 +1,326 @@
+<!-- AppShell.html - Huvudskal och layout för bokföringsapplikationen -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bokförings-app SPA</title>
+    <?!= Init_include('src/ui/CSS'); ?>
+    <style>
+      /* Svävande FAB-knappar i höger hörn */
+      #fab-container {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        z-index: 1000;
+      }
+
+      .fab-button {
+        background-color: #212529;
+        color: #f8f9fa;
+        border: 1px solid #495057;
+        padding: 10px 18px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .fab-button:hover {
+        background-color: #343a40;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      .fab-button:active {
+        transform: translateY(0);
+      }
+
+      .fab-button.btn-primary {
+        background-color: #198754;
+        border-color: #157347;
+      }
+
+      .fab-button.btn-primary:hover {
+        background-color: #157347;
+      }
+
+      .fab-button.btn-accent {
+        background-color: #0d6efd;
+        border-color: #0b5ed7;
+      }
+
+      .fab-button.btn-accent:hover {
+        background-color: #0b5ed7;
+      }
+
+      /* SIE Export Bekräftelse-banner */
+      #sie-banner {
+        position: fixed;
+        bottom: -80px;
+        left: 0;
+        right: 0;
+        background-color: #212529;
+        color: #f8f9fa;
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 3px solid #198754;
+        box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.25);
+        transition: bottom 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        z-index: 1100;
+      }
+
+      #sie-banner.active {
+        bottom: 0;
+      }
+
+      #sie-banner .banner-text {
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      #sie-banner .banner-close {
+        background: none;
+        border: 1px solid #adb5bd;
+        color: #adb5bd;
+        padding: 4px 10px;
+        border-radius: 2px;
+        cursor: pointer;
+      }
+
+      #sie-banner .banner-close:hover {
+        background-color: #343a40;
+        color: #f8f9fa;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app-container">
+      <!-- Global Header (Humble & Clean, standard-kryss i dialogen används, ingen [X] i vårt UI) -->
+      <header id="global-header">
+        <div class="header-controls">
+          <div class="control-group">
+            <label for="select-sheet">Konto / Blad</label>
+            <select id="select-sheet">
+              <option value="1930">1930 - Företagskonto</option>
+              <option value="1630">1630 - Skattekonto</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="select-year">Räkenskapsår (Brutet)</label>
+            <select id="select-year">
+              <!-- Fylls på dynamiskt via UI_loadInitialState -->
+              <option value="2025/2026">2025/2026</option>
+              <option value="2024/2025">2024/2025</option>
+            </select>
+          </div>
+        </div>
+      </header>
+
+      <!-- Tab Navigation Menu (Bokföring, Verifikat, Kontering) -->
+      <nav id="tab-navigation">
+        <button class="tab-link active" data-tab="tab-bookkeeping" id="tab-btn-bookkeeping">Bokföring</button>
+        <button class="tab-link" data-tab="tab-verification" id="tab-btn-verification">Verifikat</button>
+        <button class="tab-link" data-tab="tab-journal" id="tab-btn-journal">Kontering</button>
+      </nav>
+
+      <!-- Main Content Area with Split View -->
+      <main id="main-content">
+        <div id="split-view-container">
+          <!-- Left Panel: Transaction list/selection (1/3 default width) -->
+          <section id="panel-left" class="split-panel" style="width: 33.33%;">
+            <?!= Init_include('src/features/batching/ui/BatchView'); ?>
+          </section>
+
+          <!-- Divider / Resizer (Dragbar Splitter) -->
+          <div id="ui-resizer" title="Dra för att ändra storlek"></div>
+
+          <!-- Right Panel: Active Details / Form area (2/3 default width) -->
+          <section id="panel-right" class="split-panel" style="flex-grow: 1;">
+            
+            <!-- Tab: Verifikat (Drive-kopplingen) -->
+            <div id="tab-verification" class="tab-content">
+              <div class="panel-header">
+                <h2 id="verification-header-title">Verifikat (Mapp & Drive)</h2>
+              </div>
+              <div class="panel-body">
+                <div id="verification-status" style="font-weight: 500; margin-bottom: 12px; color: #495057;"></div>
+                <div id="verification-container" class="placeholder-text">
+                  Välj en transaktion till vänster för att söka efter matchande verifikat på Drive.
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab: Kontering (Templates & Lön) -->
+            <div id="tab-journal" class="tab-content">
+              <div class="panel-header">
+                <h2>Kontering & Manuella ändringar</h2>
+              </div>
+              <div class="panel-body">
+                <div id="journal-container" class="placeholder-text">
+                  Välj en transaktion för att ladda konteringsmallar och lönespecifikationer.
+                </div>
+              </div>
+            </div>
+
+          </section>
+        </div>
+      </main>
+
+      <!-- Floating Action Buttons (FAB) nere till höger -->
+      <div id="fab-container">
+        <!-- Visas sammanhangsberoende -->
+        <button id="fab-save-link" class="fab-button btn-accent" style="display: none;">
+          <span>🔗 Spara Länk</span>
+        </button>
+        <button id="fab-batch" class="fab-button btn-primary" style="display: none;">
+          <span>📦 Bunta</span>
+        </button>
+        <button id="fab-sie" class="fab-button">
+          <span>📤 SIE Export</span>
+        </button>
+      </div>
+
+      <!-- SIE-Exporten fälls upp som en "Bekräftelse-banner" i botten -->
+      <div id="sie-banner">
+        <div class="banner-text" id="sie-banner-msg">
+          🎉 SIE-fil har genererats framgångsrikt för räkenskapsåret!
+        </div>
+        <button class="banner-close" id="btn-close-sie-banner">Stäng</button>
+      </div>
+    </div>
+
+    <!-- Globala Script -->
+    <?!= Init_include('src/ui/JS'); ?>
+    
+    <script>
+      // Global Split-View draglogik
+      (function() {
+        const resizer = document.getElementById('ui-resizer');
+        const leftPanel = document.getElementById('panel-left');
+        const rightPanel = document.getElementById('panel-right');
+        const container = document.getElementById('split-view-container');
+        
+        let isDragging = false;
+        
+        resizer.addEventListener('mousedown', function(e) {
+          isDragging = true;
+          resizer.classList.add('active');
+          document.body.style.cursor = 'col-resize';
+          e.preventDefault();
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+          if (!isDragging) return;
+          
+          const containerRect = container.getBoundingClientRect();
+          const leftWidth = e.clientX - containerRect.left;
+          
+          // Gränser för min/max bredd (mellan 150px och 80% av skärmen)
+          const minWidth = 200;
+          const maxWidth = containerRect.width - 200;
+          
+          if (leftWidth >= minWidth && leftWidth <= maxWidth) {
+            const percentage = (leftWidth / containerRect.width) * 100;
+            leftPanel.style.width = percentage + '%';
+            rightPanel.style.flexGrow = '0';
+            rightPanel.style.width = (100 - percentage) + '%';
+          }
+        });
+        
+        document.addEventListener('mouseup', function() {
+          if (isDragging) {
+            isDragging = false;
+            resizer.classList.remove('active');
+            document.body.style.cursor = 'default';
+          }
+        });
+        
+        // Tab-byten och synkning
+        const tabLinks = document.querySelectorAll('.tab-link');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        tabLinks.forEach(link => {
+          link.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+            
+            // Specialhantering av Bokföring (vänsterpanelens huvudinnehåll)
+            if (targetTab === 'tab-bookkeeping') {
+              // Bokföring är alltid vänsterpanelen. Att klicka på fliken fokuserar eller återställer vyer
+              tabLinks.forEach(l => l.classList.remove('active'));
+              this.classList.add('active');
+              return;
+            }
+            
+            tabLinks.forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+            
+            tabContents.forEach(content => {
+              content.classList.remove('active');
+              if (content.id === targetTab) {
+                content.classList.add('active');
+              }
+            });
+            
+            // Justera FAB-synlighet efter flik
+            UI_updateFabVisibility(targetTab);
+          });
+        });
+
+        // Stäng SIE-banner
+        document.getElementById('btn-close-sie-banner').addEventListener('click', function() {
+          document.getElementById('sie-banner').classList.remove('active');
+        });
+        
+        // SIE Export FAB Klick
+        document.getElementById('fab-sie').addEventListener('click', function() {
+          const banner = document.getElementById('sie-banner');
+          const year = document.getElementById('select-year').value;
+          document.getElementById('sie-banner-msg').innerText = `🎉 SIE-fil exporterad för räkenskapsåret ${year}!`;
+          banner.classList.add('active');
+          setTimeout(() => {
+            banner.classList.remove('active');
+          }, 6000);
+        });
+      })();
+      
+      // Funktion för att byta flik programmatiskt från andra moduler
+      function UI_switchTab(tabId) {
+        const tabBtn = document.getElementById(tabId === 'tab-verification' ? 'tab-btn-verification' : 
+                                               tabId === 'tab-journal' ? 'tab-btn-journal' : 'tab-btn-bookkeeping');
+        if (tabBtn) {
+          tabBtn.click();
+        }
+      }
+      
+      // Uppdaterar synlighet på FAB-knappar baserat på aktiv flik
+      function UI_updateFabVisibility(activeTab) {
+        const saveLinkBtn = document.getElementById('fab-save-link');
+        const batchBtn = document.getElementById('fab-batch');
+        const sieBtn = document.getElementById('fab-sie');
+        
+        saveLinkBtn.style.display = 'none';
+        batchBtn.style.display = 'none';
+        sieBtn.style.display = 'none';
+        
+        if (activeTab === 'tab-verification') {
+          saveLinkBtn.style.display = 'flex';
+        } else if (activeTab === 'tab-journal') {
+          batchBtn.style.display = 'flex';
+        } else {
+          sieBtn.style.display = 'flex';
+        }
+      }
+    </script>
+  </body>
+</html>

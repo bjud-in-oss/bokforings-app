@@ -1,0 +1,531 @@
+<!-- BatchView.html - Huvudvy för Bokföring och Transaktioner -->
+<div class="batch-view-container">
+  <!-- Sök & Filtreringsbar för transaktioner -->
+  <div class="batch-search-bar">
+    <input type="text" id="tx-search-input" placeholder="Sök transaktion (text, belopp)..." />
+    <span class="tx-count-indicator" id="tx-count-text">Laddar...</span>
+  </div>
+
+  <!-- Blixtsnabb datatabell -->
+  <div class="table-scroll-container">
+    <table class="industrial-table" id="transactions-table">
+      <thead>
+        <tr>
+          <th style="width: 80px;">Status</th>
+          <th style="width: 90px;">Datum</th>
+          <th>Text / Beskrivning</th>
+          <th style="text-align: right; width: 100px;">Belopp</th>
+          <th style="text-align: right; width: 100px;">Ändrat belopp</th>
+          <th style="width: 80px;">V-Nr</th>
+          <th>Kommentar</th>
+          <th style="width: 60px; text-align: center;">Länk</th>
+          <th style="width: 80px; text-align: center;">Åtgärd</th>
+        </tr>
+      </thead>
+      <tbody id="transactions-tbody">
+        <tr>
+          <td colspan="9" class="table-placeholder">Laddar transaktionslista...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Lokal CSS enbart för denna vy -->
+<style>
+  .batch-view-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background-color: #ffffff;
+  }
+
+  .batch-search-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: #f1f3f5;
+    border-bottom: 1px solid #dee2e6;
+    gap: 12px;
+  }
+
+  .batch-search-bar input {
+    flex-grow: 1;
+    padding: 6px 10px;
+    font-size: 11px;
+    border: 1px solid #ced4da;
+    border-radius: 2px;
+    outline: none;
+  }
+
+  .batch-search-bar input:focus {
+    border-color: #212529;
+  }
+
+  .tx-count-indicator {
+    font-size: 10px;
+    font-weight: 600;
+    color: #495057;
+    background-color: #dee2e6;
+    padding: 3px 6px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .table-scroll-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  /* Industrial Table Theme */
+  .industrial-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    text-align: left;
+  }
+
+  .industrial-table th {
+    background-color: #e9ecef;
+    color: #495057;
+    font-weight: 600;
+    padding: 8px 10px;
+    border-bottom: 2px solid #dee2e6;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+  }
+
+  .industrial-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e9ecef;
+    color: #212529;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 250px;
+  }
+
+  .industrial-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+  }
+
+  .industrial-table tbody tr:hover {
+    background-color: #f1f3f5;
+  }
+
+  .industrial-table tbody tr.selected {
+    background-color: #e2e6ea !important;
+    font-weight: 500;
+    border-left: 3px solid #212529;
+  }
+
+  .industrial-table tbody tr.zebra {
+    background-color: #f8f9fa;
+  }
+
+  /* Status Badges */
+  .status-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .status-badge.completed {
+    background-color: #d1e7dd;
+    color: #0f5132;
+  }
+
+  .status-badge.error {
+    background-color: #f8d7da;
+    color: #842029;
+  }
+
+  .status-badge.batched {
+    background-color: #cff4fc;
+    color: #055160;
+  }
+
+  .status-badge.pending {
+    background-color: #e2e3e5;
+    color: #41464b;
+  }
+
+  /* Link & Delete UI */
+  .link-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px;
+    display: inline-block;
+    position: relative;
+  }
+
+  .link-hover-menu {
+    display: none;
+    position: absolute;
+    background-color: #212529;
+    color: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 2px;
+    font-size: 9px;
+    white-space: nowrap;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 4px;
+    z-index: 100;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+
+  .link-icon-btn:hover .link-hover-menu {
+    display: block;
+  }
+
+  /* Red Undo Button */
+  .btn-undo-batch {
+    background-color: #dc3545;
+    color: #ffffff;
+    border: none;
+    padding: 3px 6px;
+    font-size: 9px;
+    border-radius: 2px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+
+  .btn-undo-batch:hover {
+    background-color: #bb2d3b;
+  }
+
+  .table-placeholder {
+    padding: 30px;
+    text-align: center;
+    color: #868e96;
+    font-style: italic;
+  }
+</style>
+
+<!-- Lokal klientside-logik -->
+<script>
+  // Globala states som styrs i denna vy
+  window.BatchView_transactions = [];
+  window.BatchView_filteredTransactions = [];
+  window.BatchView_selectedIndex = -1;
+
+  // Lyssna på sökfältets inmatning
+  document.getElementById('tx-search-input').addEventListener('input', function(e) {
+    BatchView_filterAndRender(e.target.value);
+  });
+
+  // Global callback som körs när initial-tillståndet laddas
+  function BatchView_init(state) {
+    window.BatchView_transactions = state.transactions || [];
+    window.BatchView_selectedIndex = -1;
+    
+    // Filtrera och rendera
+    BatchView_filterAndRender('');
+    
+    // Hitta och välj den aktiva raden (activeRow)
+    if (state.activeRow && state.activeRow >= 9) {
+      BatchView_selectByRow(state.activeRow);
+    }
+    
+    // Koppla tangentbordsnavigering
+    BatchView_setupKeyboardNavigation();
+  }
+
+  /**
+   * Filtrerar transaktioner baserat på valt år i huvud-headern samt eventuell söktext
+   */
+  function BatchView_filterAndRender(searchText) {
+    const selectedYear = document.getElementById('select-year').value;
+    const cleanSearch = searchText.toLowerCase().trim();
+    
+    window.BatchView_filteredTransactions = window.BatchView_transactions.filter(function(tx) {
+      // Filtrera först på räkenskapsår
+      if (tx.fiscalYear !== selectedYear) {
+        return false;
+      }
+      
+      // Filtrera sedan på söktext
+      if (cleanSearch !== "") {
+        return tx.text.toLowerCase().includes(cleanSearch) || 
+               tx.date.toLowerCase().includes(cleanSearch) || 
+               tx.status.toLowerCase().includes(cleanSearch) || 
+               tx.flag.toLowerCase().includes(cleanSearch) || 
+               String(tx.amount).includes(cleanSearch);
+      }
+      
+      return true;
+    });
+
+    BatchView_renderTable();
+  }
+
+  /**
+   * Renderar tabellen i DOM
+   */
+  function BatchView_renderTable() {
+    const tbody = document.getElementById('transactions-tbody');
+    const countText = document.getElementById('tx-count-text');
+    
+    if (window.BatchView_filteredTransactions.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" class="table-placeholder">Inga transaktioner matchar valda filter.</td></tr>`;
+      countText.textContent = "0 rader";
+      return;
+    }
+
+    countText.textContent = `${window.BatchView_filteredTransactions.length} rader`;
+    let html = '';
+    
+    window.BatchView_filteredTransactions.forEach(function(tx, index) {
+      const isSelected = index === window.BatchView_selectedIndex ? 'selected' : '';
+      const isZebra = index % 2 === 1 ? 'zebra' : '';
+      
+      // Status formatting
+      let statusClass = 'pending';
+      let statusLabel = tx.status || 'Obehandlad';
+      
+      if (statusLabel.includes('Slutförd')) {
+        statusClass = 'completed';
+      } else if (statusLabel.includes('FEL')) {
+        statusClass = 'error';
+      } else if (statusLabel.includes('Buntad')) {
+        statusClass = 'batched';
+      }
+
+      // Link column format
+      let linkHtml = '';
+      if (tx.link && tx.link.trim() !== '') {
+        linkHtml = `
+          <a href="${tx.link}" target="_blank" class="link-icon-btn" onclick="event.stopPropagation();">
+            🔗
+            <span class="link-hover-menu">
+              Öppna kvitto / Ta bort länk
+            </span>
+          </a>
+        `;
+      }
+
+      // Undo batching action button
+      let actionHtml = '';
+      if (statusLabel.includes('Buntad') || statusLabel.includes('Slutförd')) {
+        actionHtml = `<button class="btn-undo-batch" onclick="BatchView_undoBatch(${tx.row}, event)">Avbunta</button>`;
+      }
+
+      html += `
+        <tr class="${isSelected} ${isZebra}" data-index="${index}" onclick="BatchView_selectIndex(${index})">
+          <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+          <td>${tx.date}</td>
+          <td title="${tx.text}">${tx.text}</td>
+          <td style="text-align: right; font-weight: 600;">${tx.amount.toLocaleString('sv-SE', {minimumFractionDigits: 2})} kr</td>
+          <td style="text-align: right; color: #868e96;">${tx.editedAmount ? tx.editedAmount.toLocaleString('sv-SE', {minimumFractionDigits: 2}) + ' kr' : '-'}</td>
+          <td>${tx.flag || '-'}</td>
+          <td title="${tx.comment}">${tx.comment || '-'}</td>
+          <td style="text-align: center;">${linkHtml}</td>
+          <td style="text-align: center;">${actionHtml}</td>
+        </tr>
+      `;
+    });
+
+    tbody.innerHTML = html;
+  }
+
+  /**
+   * Väljer en transaktion i listan utifrån dess interna index
+   */
+  function BatchView_selectIndex(index) {
+    if (index < 0 || index >= window.BatchView_filteredTransactions.length) return;
+    
+    window.BatchView_selectedIndex = index;
+    
+    // Uppdatera tabellen för att markera vald rad
+    const rows = document.querySelectorAll('#transactions-table tbody tr');
+    rows.forEach(function(row) {
+      row.classList.remove('selected');
+    });
+    
+    const selectedRow = rows[index];
+    if (selectedRow) {
+      selectedRow.classList.add('selected');
+      selectedRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    const tx = window.BatchView_filteredTransactions[index];
+    
+    // Hantera flik-hoppning och asynkron Drive-sökning baserat på länkens status (UX State Machine)
+    const hasLink = tx.link && tx.link.trim() !== '';
+    
+    if (!hasLink) {
+      // 1. Rad saknar länk -> Byt automatiskt till 'Verifikat'
+      UI_switchTab('tab-verification');
+      
+      const statusDiv = document.getElementById('verification-status');
+      const containerDiv = document.getElementById('verification-container');
+      
+      if (statusDiv) statusDiv.innerText = "Söker filsökväg...";
+      if (containerDiv) containerDiv.innerHTML = `<p class="placeholder-text">Söker efter filer i ÅÅMM-mappar på Google Drive...</p>`;
+      
+      // Simulera Drive-sökning asynkront
+      setTimeout(function() {
+        if (statusDiv) statusDiv.innerText = `Kopplad till mapp: Skannat - ${tx.date.substring(2,7).replace('-', '')}`;
+        if (containerDiv) {
+          containerDiv.innerHTML = `
+            <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 12px; border-radius: 2px;">
+              <p style="font-weight: 600; margin-bottom: 8px;">Matchande filer hittade på Drive:</p>
+              <ul style="list-style-type: none; padding-left: 0;">
+                <li style="padding: 6px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                  <span>📄 kvitto_${tx.date}_${Math.abs(tx.amount)}.pdf</span>
+                  <button class="btn-secondary" style="padding: 2px 6px; font-size: 10px;" onclick="BatchView_mockSaveLink('${tx.row}')">Koppla fil</button>
+                </li>
+              </ul>
+            </div>
+          `;
+        }
+      }, 800);
+      
+    } else {
+      // 2. Rad har redan länk -> Byt automatiskt till 'Kontering'
+      UI_switchTab('tab-journal');
+      
+      const journalContainer = document.getElementById('journal-container');
+      if (journalContainer) {
+        journalContainer.innerHTML = `
+          <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 16px; border-radius: 2px;">
+            <p style="font-weight: 600; font-size: 13px; margin-bottom: 12px;">Föreslagen Kontering (Kategori: Inköp Hårdvara)</p>
+            <table class="industrial-table" style="margin-bottom: 16px;">
+              <thead>
+                <tr>
+                  <th>Konto</th>
+                  <th>Kontonamn</th>
+                  <th style="text-align: right;">Debet</th>
+                  <th style="text-align: right;">Kredit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>4000</td>
+                  <td>Inköp hårdvara</td>
+                  <td style="text-align: right;">${tx.amount.toFixed(2)}</td>
+                  <td style="text-align: right;"></td>
+                </tr>
+                <tr>
+                  <td>1930</td>
+                  <td>Företagskonto</td>
+                  <td style="text-align: right;"></td>
+                  <td style="text-align: right;">${tx.amount.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+              <button class="btn-secondary" onclick="BatchView_mockAddRow()">+ Lägg till rad</button>
+              <button class="btn-undo-batch" style="background-color: #198754;" onclick="BatchView_mockBatch()">Godkänn & Bunta</button>
+            </div>
+          </div>
+        `;
+      }
+    }
+  }
+
+  /**
+   * Väljer transaktion i listan utifrån kalkylarkets radnummer
+   */
+  function BatchView_selectByRow(rowNumber) {
+    const idx = window.BatchView_filteredTransactions.findIndex(tx => tx.row === Number(rowNumber));
+    if (idx !== -1) {
+      BatchView_selectIndex(idx);
+    }
+  }
+
+  /**
+   * Tangentbordsnavigering med pil Upp/Ned och Enter
+   */
+  function BatchView_setupKeyboardNavigation() {
+    document.removeEventListener('keydown', BatchView_handleKeyDown);
+    document.addEventListener('keydown', BatchView_handleKeyDown);
+  }
+
+  function BatchView_handleKeyDown(e) {
+    // Navigera endast om vi inte skriver i sökfältet
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') {
+      return;
+    }
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextIndex = window.BatchView_selectedIndex + 1;
+      if (nextIndex < window.BatchView_filteredTransactions.length) {
+        BatchView_selectIndex(nextIndex);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevIndex = window.BatchView_selectedIndex - 1;
+      if (prevIndex >= 0) {
+        BatchView_selectIndex(prevIndex);
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (window.BatchView_selectedIndex !== -1) {
+        BatchView_selectIndex(window.BatchView_selectedIndex);
+      }
+    }
+  }
+
+  // Ångra buntning (Avbunta)
+  function BatchView_undoBatch(rowNum, e) {
+    if (e) e.stopPropagation();
+    if (confirm(`Är du säker på att du vill avbunta rad ${rowNum}?`)) {
+      alert(`Avbuntar rad ${rowNum} i kalkylarket (GAS backend anropas)...`);
+      // Här anropas backend i framtida steg. För nu uppdaterar vi bara lokalt tillstånd
+      const tx = window.BatchView_transactions.find(t => t.row === rowNum);
+      if (tx) {
+        tx.status = 'Obehandlad';
+        BatchView_filterAndRender('');
+      }
+    }
+  }
+
+  // Simulera sparande av länk från Verifikat-kopplingen
+  function BatchView_mockSaveLink(rowNum) {
+    alert(`Länk sparad till rad ${rowNum} i kalkylarket.`);
+    const tx = window.BatchView_transactions.find(t => t.row === Number(rowNum));
+    if (tx) {
+      tx.link = 'https://drive.google.com/file/d/mock';
+      BatchView_filterAndRender('');
+      // Automatisk hopp till kontering efter att ha kopplat fil
+      UI_switchTab('tab-journal');
+      BatchView_selectByRow(rowNum);
+    }
+  }
+
+  // Lägg till rad i konteringstabellen
+  function BatchView_mockAddRow() {
+    alert("Ny kontorad tillagd för redigering.");
+  }
+
+  // Simulera lyckad buntning
+  function BatchView_mockBatch() {
+    const idx = window.BatchView_selectedIndex;
+    if (idx !== -1) {
+      const tx = window.BatchView_filteredTransactions[idx];
+      tx.status = 'Buntad (Klar)';
+      alert(`Rad ${tx.row} har buntats framgångsrikt.`);
+      BatchView_filterAndRender('');
+      // Gå tillbaka till bokföringsfliken efter buntning
+      UI_switchTab('tab-bookkeeping');
+    }
+  }
+</script>

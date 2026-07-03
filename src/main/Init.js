@@ -22,7 +22,7 @@ function Init_onOpen() {
  * Öppnar programmets sidopanel (Sidebar).
  */
 function Init_showSidebar() {
-  const html = HtmlService.createTemplateFromFile('src/ui/GUI')
+  const html = HtmlService.createTemplateFromFile('src/main/ui/AppShell')
     .evaluate()
     .setTitle("Bokförings-app SPA")
     .setSandboxMode(HtmlService.SandboxMode.IFRAME)

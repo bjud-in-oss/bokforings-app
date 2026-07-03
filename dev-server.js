@@ -11,8 +11,8 @@ const PORT = 3000; // Port 3000 is required by the environment!
 
 app.get('/', (req, res) => {
   try {
-    const guiPath = path.join(__dirname, 'src', 'ui', 'GUI.html');
-    let guiHtml = fs.readFileSync(guiPath, 'utf8');
+    const shellPath = path.join(__dirname, 'src', 'main', 'ui', 'AppShell.html');
+    let html = fs.readFileSync(shellPath, 'utf8');
 
     // Read CSS and JS files
     const cssPath = path.join(__dirname, 'src', 'ui', 'CSS.html');
@@ -21,13 +21,17 @@ app.get('/', (req, res) => {
     const jsPath = path.join(__dirname, 'src', 'ui', 'JS.html');
     const jsHtml = fs.readFileSync(jsPath, 'utf8');
 
+    // Read BatchView file
+    const batchViewPath = path.join(__dirname, 'src', 'features', 'batching', 'ui', 'BatchView.html');
+    const batchViewHtml = fs.readFileSync(batchViewPath, 'utf8');
+
     // Replace the scriptlet tags with file contents
-    // Supports both 'src/ui/CSS' and 'CSS' styles of includes
-    guiHtml = guiHtml.replace(/<\?!=\s*Init_include\(['"](?:src\/ui\/)?CSS['"]\);\s*\?>/g, cssHtml);
-    guiHtml = guiHtml.replace(/<\?!=\s*Init_include\(['"](?:src\/ui\/)?JS['"]\);\s*\?>/g, jsHtml);
+    html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/ui\/)?CSS['"]\);\s*\?>/g, cssHtml);
+    html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/ui\/)?JS['"]\);\s*\?>/g, jsHtml);
+    html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/features\/batching\/ui\/)?BatchView['"]\);\s*\?>/g, batchViewHtml);
 
     res.setHeader('Content-Type', 'text/html');
-    res.send(guiHtml);
+    res.send(html);
   } catch (error) {
     console.error(error);
     res.status(500).send(`Server error: ${error.message}`);

@@ -144,11 +144,49 @@
    * Laddar det initiala tillståndet från backend och uppdaterar gränssnittet.
    */
   function UI_loadInitialState() {
+    // Koppla händelselyssnare till de globala dropdown-menyerna i headern
+    const sheetSelect = document.getElementById("select-sheet");
+    const yearSelect = document.getElementById("select-year");
+
+    if (sheetSelect) {
+      sheetSelect.addEventListener("change", function(e) {
+        const newSheet = e.target.value;
+        if (typeof google !== "undefined" && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(function(state) {
+              window.UI_STATE = state;
+              UI_updateHeaderControls(state);
+              if (typeof BatchView_init === 'function') {
+                BatchView_init(state);
+              }
+            })
+            .Batch_getInitialState(newSheet);
+        } else {
+          // Mock/Simulation vid byte i dev-miljö
+          window.UI_STATE.sheet = newSheet;
+          if (typeof BatchView_init === 'function') {
+            BatchView_init(window.UI_STATE);
+          }
+        }
+      });
+    }
+
+    if (yearSelect) {
+      yearSelect.addEventListener("change", function() {
+        if (typeof BatchView_filterAndRender === 'function') {
+          BatchView_filterAndRender(document.getElementById('tx-search-input') ? document.getElementById('tx-search-input').value : '');
+        }
+      });
+    }
+
     if (typeof google !== "undefined" && google.script && google.script.run) {
       google.script.run
         .withSuccessHandler(function(state) {
           window.UI_STATE = state;
           UI_updateHeaderControls(state);
+          if (typeof BatchView_init === 'function') {
+            BatchView_init(state);
+          }
         })
         .withFailureHandler(function(err) {
           console.error("Fel vid laddning av initialt tillstånd:", err);
@@ -157,15 +195,27 @@
         .Batch_getInitialState();
     } else {
       console.log("google.script.run saknas (simulering).");
-      // Fallback/Simulering för lokal utvecklingsmiljö
+      // Fallback/Simulering för lokal utvecklingsmiljö med fiktiva men realistiska transaktioner
       const mockState = {
         sheet: "1930",
-        activeRow: 15,
+        activeRow: 11,
         currentYear: "2025/2026",
-        availableYears: ["2023/2024", "2024/2025", "2025/2026"]
+        availableYears: ["2024/2025", "2025/2026", "2026/2027"],
+        transactions: [
+          {row: 9, date: "2025-07-15", type: "Kortköp", text: "Adobe Systems", amount: -189.00, flag: "", comment: "Månadslicens Creative Cloud", link: "https://drive.google.com/file/d/1", status: "Buntad (Klar)", fiscalYear: "2025/2026"},
+          {row: 10, date: "2025-08-01", type: "Banköverföring", text: "Inbetalning faktura 1024", amount: 15000.00, flag: "", comment: "Kundinbetalning", link: "", status: "Obehandlad", fiscalYear: "2025/2026"},
+          {row: 11, date: "2025-08-10", type: "Kortköp", text: "SJR Bemanning", amount: -4500.00, flag: "?", comment: "Konsulttjänster juli", link: "", status: "Obehandlad", fiscalYear: "2025/2026"},
+          {row: 12, date: "2025-11-20", type: "Bankavgift", text: "Månadsavgift SEB", amount: -150.00, flag: "", comment: "Banktjänster", link: "https://drive.google.com/file/d/2", status: "Slutförd (V1)", fiscalYear: "2025/2026"},
+          {row: 13, date: "2026-02-15", type: "Skatt", text: "Momsinbetalning", amount: -2500.00, flag: "", comment: "Moms Skatteverket", link: "", status: "Obehandlad", fiscalYear: "2025/2026"}
+        ]
       };
       window.UI_STATE = mockState;
-      setTimeout(() => UI_updateHeaderControls(mockState), 500);
+      setTimeout(() => {
+        UI_updateHeaderControls(mockState);
+        if (typeof BatchView_init === 'function') {
+          BatchView_init(mockState);
+        }
+      }, 500);
     }
   }
 
