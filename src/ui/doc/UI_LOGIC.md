@@ -1,21 +1,21 @@
 # SYSTEM LOGIC: FRONTEND UI/UX SPECIFICATION
 
 ## 1. STRUKTURELL LAYOUT & SYSTEMSKISS
-Gränssnittet är en Single Page Application (SPA) byggd med Vanilla HTML, CSS och JS som körs som en sidopanel eller dialogruta i Google Sheets. För att ge en professionell och ergonomisk arbetsmiljö följer vi principen **"Industrial Clarity"** med en tydlig och förutsägbar vy utan dolda tillstånd.
+Gränssnittet är en Single Page Application (SPA) byggd med Vanilla HTML, CSS och JS som körs som en modeless dialogruta i Google Sheets. För att ge en professionell och ergonomisk arbetsmiljö följer vi principen **"Industrial Clarity"** med en tydlig och förutsägbar vy utan dolda tillstånd.
 
 ### Gränssnittets Layout-struktur:
 ```
 +-----------------------------------------------------------------------+
-|  GLOBAL HEADER: [Räkenskapsår V]  [Blad (1930/1630) V]            [X] |
+|  GLOBAL HEADER: [Räkenskapsår (Brutet t.ex. 2025/2026) V]  [Blad (1930/1630) V] |
 +-----------------------------------+-----------------------------------+
 |                                   |                                   |
-|   LEFT PANEL: FLIKSYSTEM          |   RIGHT PANEL: AKTIVT ARBETSFÄLT  |
+|   LEFT PANEL:                     |   RIGHT PANEL: AKTIVT ARBETSFÄLT  |
 |   [ Bokföring ] [Verifikat] [Kont]|                                   |
 |   +-----------------------------+ |                                   |
 |   |                             | |                                   |
 |   |  Aktiv tab-vy visas här     | |                                   |
 |   |                             | |                                   |
-|   |                             | |                                   |
+|   |  (Standard: 1/3 bredd)      | |  (Standard: 2/3 bredd)          |
 |   |                             | |                                   |
 |   |                             | |                                   |
 |   +-----------------------------+ |                                   |
@@ -23,137 +23,75 @@ Gränssnittet är en Single Page Application (SPA) byggd med Vanilla HTML, CSS o
 +-----------------------------------+-----------------------------------+
 |  SPLIT-VIEW RESIZER (Dragbar avdelare mellan panelerna)               |
 +-----------------------------------------------------------------------+
-|  SIE-BANNER (Dold i botten, visas efter export)                      |
+|  SIE-BANNER (Dold i botten, visas efter export som en bekräftelse-banner) |
 +-----------------------------------------------------------------------+
 ```
 
 ---
 
-## 2. KOMPONENTDETALJER
+## 2. KOMPONENTDETALJER & KOMPAKTNESS
 
 ### A. Global Header (Toppfältet)
-* **Räkenskapsår (Accounting Year):** En `<select>` dropdown som låter användaren välja brutet räkenskapsår (t.ex. "2025/2026"). Detta val styr filtreringen i alla flikar.
+* **Brutna Räkenskapsår:** En `<select>` dropdown som låter användaren välja brutet räkenskapsår (t.ex. "2025/2026"). Detta val styr filtreringen i alla flikar.
 * **Kalkylblads-väljare:** En `<select>` dropdown för att skifta mellan de två tillåtna datakällorna: `'1930'` (Företagskonto) och `'1630'` (Avräkningskonto).
-* **Realtidssaldo:** Visar det aktuella summerade saldot för det valda kalkylbladet (t.ex. `'1930 Saldo: 54 320 kr'`). Detta saldo hämtas asynkront från backend och uppdateras automatiskt varje gång en buntning eller avbuntning sker.
-* **Stängningsknapp [X]:** En distinkt, röd-aktig knapp i det övre högra hörnet som anropar `google.script.host.close()` för att omedelbart stänga sidopanelen/dialogrutan.
+* **Inga "stimmiga" rubriker:** Inga onödiga rubriker som "Bokföringspanel" eller liknande. Flikarna i gränssnittet fungerar som rubriker i sig själva för att spara värdefullt vertikalt utrymme.
+* **Ingen extra stängningsknapp:** Vi använder Google Sheets standard-kryss i dialogrutan. Ingen extra [X]-knapp eller "Stäng" i vårt interna UI.
 
 ### B. Dragsplit (Split-View Resizer)
 * Mellan vänster panel och höger panel ligger en vertikal dragbar avdelare (`#ui-resizer`).
-* Klientsidan registrerar händelsehanterare (`mousedown` / `touchstart`) för att dynamiskt ändra bredden (`grid-template-columns` eller `flex-basis`) på de två panelerna i realtid, vilket ger användaren kontroll över sitt skärmutrymme.
+* Standardinställningen för panelerna är **1/3 bredd för vänster panel** och **2/3 bredd för höger panel**.
+* Klientsidan registrerar händelsehanterare (`mousedown` / `touchstart`) för att dynamiskt ändra bredden på panelerna i realtid, vilket ger användaren total kontroll över skärmutrymmet.
 
-### C. Fliksystem (Vänster Panel)
-Tre huvudflikar styr vad användaren arbetar med:
-1. **'Bokföring' (Huvudvy):**
-   - Visar en bred, högdensitets-tabell över årets alla rader laddade från det valda bladet (börjar på rad 9).
-   - **Kolumnkrav för tabellen:**
-     - **Datum:** Transaktionsdatum (Kolumn B).
-     - **Beskrivning:** Fritext (Kolumn C).
-     - **Belopp:** Beräknat/Visat värde baserat på Debet/Kredit.
-     - **Ändrat (E):** Status i Kolumn E (t.ex. korrigeringar).
-     - **Nr (F):** Det permanenta verifikationsnumret (Kolumn F).
-     - **Kommentar:** Anteckningar (Kolumn G).
-     - **Länk:** Visar en klickbar `🔗`-ikon om en giltig Drive-URL finns i Kolumn H. Vid klick laddas en förhandsvisning asynkront.
-     - **Status (I):** Statusindikator för verifikatet (Kolumn I).
-     - **Åtgärd:** En knapp för att **'Avbunta'** raden (vilket rensar T, U, V om raden ännu inte exporterats permanent).
-2. **'Verifikat' (Google Drive-väljare):**
-   - Erbjuder en filhanterare ansluten till Drive.
-   - Visar nyligen uppladdade underlag i den aktuella `YYMM`-mappen.
-   - Tillåter användaren att snabbt döpa om, flytta eller ladda upp nya filer.
-3. **'Kontering' (Templates & Inmatning):**
-   - Gränssnitt för manuell registrering av nya transaktioner.
-   - Använder en `<datalist>` i kontonummer-fälten för automatisk autocomplete mot den inlästa kontoplanen.
-   - Har en knapp **"+ Lägg till rad"** för att dynamiskt expandera verifikatet med obegränsat antal debet/kredit-rader.
+### C. Fliksystem & De Tre Huvudflikarna
+Flikarna ska heta exakt: **Bokföring**, **Verifikat** och **Kontering**.
 
-### D. SIE-Bannern (Dold botten-vy)
-* Denna sektion är initialt helt dold (`display: none`).
-* Den blir synlig **ENDAST** omedelbart efter att en framgångsrik SIE-export har initierats och filen har genererats.
-* **Innehåll i SIE-bannern:**
-  1. Steg-för-steg instruktioner och direktlänkar för att ladda upp filen till bokföringstjänsten (t.ex. *Enkelbok*).
-  2. Den slutgiltiga åtgärdsknappen: **"Bekräfta (Auto-Numrera)"**. Vid klick på denna tilldelas de permanenta V-numren till kolumn F och de temporära kolumnerna T, U, V rensas i kalkylarket.
+#### 1. Fliken 'Bokföring' (Huvudvy)
+* Visar hela året i en blixtsnabb datatabell **utan radnummer** för maximal kompakthet.
+* **Ergonomisk navigering:** Man kan enkelt navigera mellan raderna med kalkylarkets piltangenter (Upp/Ned) samt trycka `Enter` för att välja en rad.
+* **Strikt kolumnordning (Vänster till Höger):**
+  1. **Status:** Statusindikator från Kolumn I (placerad längst till vänster).
+  2. **Datum:** Transaktionsdatum (Kolumn B).
+  3. **Text:** Beskrivning (Kolumn C).
+  4. **Belopp:** Beräknat/Visat värde baserat på Debet/Kredit.
+  5. **Ändrat Belopp:** Manuellt ändrat belopp (från Kolumn E för att spåra manuella korrigeringar).
+  6. **V-Nr:** Det permanenta eller temporära verifikationsnumret (Kolumn F).
+  7. **Kommentar:** Anteckningar (Kolumn G).
+  8. **Hyperlänk:** Visar enbart en klickbar `🔗`-ikon (om det finns en länk i Kolumn H) med en smidig hover-meny för att ta bort länken.
+* **Avbuntning:** Har en röd **"Avbunta"**-knapp direkt i listan för att omedelbart ångra en buntning och återställa raden.
+
+#### 2. Fliken 'Verifikat' (Drive-kopplingen)
+* **Asynchronous Lazy Loading:** När en rad klickas, laddas Drive-sökvägen asynkront i bakgrunden. Under sökningen visas texten *"Söker filsökväg..."* i stället för att låsa hela gränssnittet, vilket gör att appen startar och reagerar blixtsnabbt.
+* **Kompakt filvy:** Visar filnamnet förkortat från dess respektive `ÅÅMM`-mapp på Drive.
+* **Filhantering:** Det ska finnas möjlighet att direkt flytta, ladda upp, eller döpa om filer.
+
+#### 3. Fliken 'Kontering' (Templates & Lön)
+* **Flexibel radredigering:** Användaren måste manuellt kunna ändra belopp och konton, samt dynamiskt lägga till eller ta bort rader (kritiskt för hantering av t.ex. komplexa lönespecifikationer).
+* **Autocomplete:** Stöder autocomplete mot kontoplanen i realtid när man skriver kontonummer eller söker i dropdown-listan.
+* **SIE-Bannern (Bekräftelse-banner):** När en SIE-export genereras, fälls en smal bekräftelse-banner upp i botten av skärmen i stället för att dölja hela gränssnittet med en blockerande modal eller helskärmsvy.
 
 ---
 
-## 3. KLIENTSIDE LOGIK & TILLSTÅNDSHANTERING (`JS.html`)
+## 3. SMART TAB-HOPPNING & AUTOMATISKT FLÖDE (UX)
+För att minimera antalet klick och låta användaren "flyga" igenom bokföringen, styrs gränssnittet av ett intelligent, automatiskt flödesmönster:
 
-```javascript
-// Globalt tillstånd i klientgränssnittet
-const UI_STATE = {
-  activeSheet: "1930",
-  activeYear: "2025",
-  activeTab: "bokforing",
-  accountPlan: [],     // Hämtas en gång per session
-  selectedRow: null,   // Raden användaren har markerat
-  dragStartWidth: 0,
-  isDragging: false
-};
-
-/**
- * Initierar gränssnittet vid laddning.
- */
-function UI_init() {
-  UI_setupEventListeners();
-  UI_loadInitialState();
-  UI_loadAccountPlan();
-}
-
-/**
- * Registrerar lyssnare för resizer, flikar och dropdowns.
- */
-function UI_setupEventListeners() {
-  // Resizer logik
-  const resizer = document.getElementById("ui-resizer");
-  const leftPanel = document.getElementById("left-panel");
-  
-  resizer.addEventListener("mousedown", (e) => {
-    UI_STATE.isDragging = true;
-    UI_STATE.dragStartWidth = leftPanel.offsetWidth;
-    document.body.style.cursor = "col-resize";
-  });
-  
-  document.addEventListener("mousemove", (e) => {
-    if (!UI_STATE.isDragging) return;
-    const newWidth = e.clientX; // Avstånd från vänsterkant
-    if (newWidth > 150 && newWidth < window.innerWidth - 150) {
-      leftPanel.style.width = newWidth + "px";
-    }
-  });
-  
-  document.addEventListener("mouseup", () => {
-    if (UI_STATE.isDragging) {
-      UI_STATE.isDragging = false;
-      document.body.style.cursor = "default";
-    }
-  });
-}
-
-/**
- * Laddar kalkylarkets ursprungstillstånd asynkront.
- */
-function UI_loadInitialState() {
-  google.script.run
-    .withSuccessHandler((state) => {
-      UI_STATE.activeSheet = state.sheet;
-      UI_STATE.activeYear = state.year;
-      document.getElementById("select-sheet").value = state.sheet;
-      document.getElementById("select-year").value = state.year;
-      
-      // Fokusera den aktiva raden i tabellen
-      if (state.activeRow >= 9) {
-        UI_STATE.selectedRow = state.activeRow;
-        UI_scrollToRow(state.activeRow);
-      }
-      
-      UI_refreshActiveTab();
-    })
-    .Batch_getInitialState();
-}
-```
+1. **Val av rad UTAN länk (Kolumn H är tom):**
+   * Applikationen förstår direkt att ett underlag saknas för denna transaktion.
+   * Gränssnittet hoppar automatiskt över till fliken **Verifikat** och aktiverar Drive-väljaren/kopplingen så att användaren kan leta upp och koppla rätt fil.
+2. **När filen kopplas:**
+   * Applikationen sparar omedelbart länken till Kolumn H i kalkylarket.
+   * Gränssnittet reagerar live och växlar automatiskt över till fliken **Kontering** (Mall).
+3. **Val av rad MED länk (Kolumn H innehåller redan en URL):**
+   * Eftersom verifikatet redan är kopplat är Drive-väljaren irrelevant.
+   * Applikationen hoppar helt förbi Verifikat-fliken och tar användaren direkt till fliken **Kontering** (Mall). Drive-kopplingen förblir dold eller inaktiv för att spara tid.
+4. **Efter utförd buntning i Kontering:**
+   * När konteringen sparas/buntas kastas användaren automatiskt tillbaka till huvudfliken **Bokföring** för att kunna påbörja nästa transaktion.
 
 ---
 
-## 4. ERGONOMI & KORTKOMMANDON (POWER-USER)
-För att underlätta det löpande bokföringsarbetet och göra gränssnittet extremt tidseffektivt för erfarna användare (power-users) ska applikationen stödja följande navigations- och ergonomimönster:
+## 4. FLOATING ACTION BUTTONS (FAB)
+För att bibehålla en avskalad och extremt ren layout placeras primära sammanhangsberoende handlingar i en svävande knappgrupp (**Floating Action Buttons**) nere i det högra hörnet:
+* **Spara Länk / Koppla:** Visas under kopplingsflödet.
+* **Bunta:** Visas vid aktiv kontering.
+* **SIE Export:** Visas i bokföringsvyn för att exportera data.
 
-* **Ctrl + S / Cmd + S (Snabb-buntning):** En global klientside-event listener på tangentbordet (`keydown`) ska övervaka denna kombination. När den trycks triggas omedelbart buntningslogiken för de markerade eller fokuserade kalkylraderna, utan att användaren behöver lämna tangentbordet.
-* **Escape-tangenten (Stäng & Avbryt):** Om användaren trycker på `Escape` ska alla öppna dropdown-menyer, tillfälliga flytande förhandsvisningar av kvitton samt den bottenplacerade SIE-bannern omedelbart stängas.
-* **Smart Tab-ordning (Fält-hoppning):** Inuti konteringsmallen och den manuella inmatningen ska `tabindex` ställas in så att användaren smidigt kan hoppa sekventiellt mellan Debet- och Kredit-fälten för att snabbt kunna skriva in belopp och klicka på "Lägg till rad" eller "Spara" helt utan att röra musen.
+Dessa knappar anpassas dynamiskt beroende på vilken flik eller radstatus som för tillfället är aktiv.
