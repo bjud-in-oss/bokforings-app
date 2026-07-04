@@ -15,10 +15,10 @@ app.get('/', (req, res) => {
     let html = fs.readFileSync(shellPath, 'utf8');
 
     // Read CSS and JS files
-    const cssPath = path.join(__dirname, 'src', 'ui', 'CSS.html');
+    const cssPath = path.join(__dirname, 'src', 'main', 'ui', 'CSS.html');
     const cssHtml = fs.readFileSync(cssPath, 'utf8');
 
-    const jsPath = path.join(__dirname, 'src', 'ui', 'JS.html');
+    const jsPath = path.join(__dirname, 'src', 'main', 'ui', 'JS.html');
     const jsHtml = fs.readFileSync(jsPath, 'utf8');
 
     // Read BatchView file
@@ -26,8 +26,8 @@ app.get('/', (req, res) => {
     const batchViewHtml = fs.readFileSync(batchViewPath, 'utf8');
 
     // Replace the scriptlet tags with file contents
-    html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/ui\/)?CSS['"]\);\s*\?>/g, cssHtml);
-    html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/ui\/)?JS['"]\);\s*\?>/g, jsHtml);
+    html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/main\/ui\/)?CSS['"]\);\s*\?>/g, cssHtml);
+    html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/main\/ui\/)?JS['"]\);\s*\?>/g, jsHtml);
     html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/features\/batching\/ui\/)?BatchView['"]\);\s*\?>/g, batchViewHtml);
 
     res.setHeader('Content-Type', 'text/html');
