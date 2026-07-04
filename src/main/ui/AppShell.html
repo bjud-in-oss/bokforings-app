@@ -150,15 +150,7 @@
             
             <!-- Tab: Verifikat (Drive-kopplingen) -->
             <div id="tab-verification" class="tab-content">
-              <div class="panel-header">
-                <h2 id="verification-header-title">Verifikat (Mapp & Drive)</h2>
-              </div>
-              <div class="panel-body">
-                <div id="verification-status" style="font-weight: 500; margin-bottom: 12px; color: #495057;"></div>
-                <div id="verification-container" class="placeholder-text">
-                  Välj en transaktion till vänster för att söka efter matchande verifikat på Drive.
-                </div>
-              </div>
+              <?!= Init_include('src/features/drive/ui/DriveView'); ?>
             </div>
 
             <!-- Tab: Kontering (Templates & Lön) -->

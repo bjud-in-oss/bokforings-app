@@ -1,0 +1,666 @@
+<!-- DriveView.html - Vyn för Verifikat-koppling och Drive-uppladdning -->
+<div class="drive-view-container">
+  <!-- Status Header för aktiv koppling -->
+  <div class="drive-status-header">
+    <div class="drive-header-title" id="drive-tx-title">Inget val pågår</div>
+    <div class="drive-header-subtitle" id="drive-tx-meta">Välj en transaktion i bokföringslistan för att påbörja sökning</div>
+  </div>
+
+  <div class="drive-content-split">
+    <!-- Vänster del: Filsökning och koppling -->
+    <div class="drive-search-section">
+      <div class="drive-section-title">Dokument och kvitton på Google Drive</div>
+      
+      <!-- Loading Spinner -->
+      <div id="drive-loader" class="drive-spinner-container" style="display: none;">
+        <div class="drive-spinner"></div>
+        <p>Söker efter verifikat i aktuella månadsmappar...</p>
+      </div>
+
+      <!-- Resultatlista -->
+      <div id="drive-results-list" class="drive-results-container">
+        <p class="placeholder-text">Ingen transaktion aktiv. Markera en rad i listan till vänster.</p>
+      </div>
+    </div>
+
+    <!-- Höger del: Drag & Drop Uppladdning -->
+    <div class="drive-upload-section">
+      <div class="drive-section-title">Ladda upp nytt underlag</div>
+      
+      <div id="drive-dropzone" class="drive-drop-zone">
+        <div class="drop-zone-icon">📤</div>
+        <p class="drop-zone-text">Dra och släpp kvitto/PDF här</p>
+        <p class="drop-zone-subtext">eller klicka för att välja fil manuellt</p>
+        <input type="file" id="drive-file-input" style="display: none;" accept="image/*,application/pdf" />
+      </div>
+
+      <!-- Uppladdnings-progress / Status -->
+      <div id="drive-upload-status" class="drive-upload-status-box" style="display: none;">
+        <div class="upload-progress-bar">
+          <div id="drive-progress-fill" class="progress-fill" style="width: 0%;"></div>
+        </div>
+        <p id="drive-upload-msg">Förbereder uppladdning...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Lokala stilar för Drive-vyn -->
+<style>
+  .drive-view-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background-color: #ffffff;
+    box-sizing: border-box;
+  }
+
+  .drive-status-header {
+    background-color: #212529;
+    color: #f8f9fa;
+    padding: 12px 16px;
+    border-bottom: 2px solid #198754;
+  }
+
+  .drive-header-title {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .drive-header-subtitle {
+    font-size: 10px;
+    color: #adb5bd;
+    margin-top: 4px;
+  }
+
+  .drive-content-split {
+    display: flex;
+    flex-direction: row;
+    flex-grow: 1;
+    overflow: hidden;
+    gap: 1px;
+    background-color: #dee2e6;
+  }
+
+  .drive-search-section {
+    width: 55%;
+    background-color: #ffffff;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .drive-upload-section {
+    width: 45%;
+    background-color: #f8f9fa;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .drive-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #495057;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #e9ecef;
+    padding-bottom: 6px;
+  }
+
+  /* Spinner */
+  .drive-spinner-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: #868e96;
+    font-size: 11px;
+    gap: 12px;
+  }
+
+  .drive-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #198754;
+    border-radius: 50%;
+    animation: drive-spin 1s linear infinite;
+  }
+
+  @keyframes drive-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* Resultatkort */
+  .drive-file-card {
+    border: 1px solid #ced4da;
+    border-radius: 2px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background-color: #ffffff;
+    transition: box-shadow 0.15s ease;
+  }
+
+  .drive-file-card:hover {
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  }
+
+  .drive-file-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .drive-file-name-container {
+    flex-grow: 1;
+    overflow: hidden;
+  }
+
+  .drive-file-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: #212529;
+    word-break: break-all;
+  }
+
+  .drive-file-path {
+    font-size: 9px;
+    color: #868e96;
+    margin-top: 2px;
+  }
+
+  .drive-file-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    border-top: 1px dashed #e9ecef;
+    padding-top: 8px;
+    justify-content: flex-end;
+  }
+
+  /* Inline Rename Form */
+  .drive-rename-box {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+    background-color: #f1f3f5;
+    padding: 6px;
+    border-radius: 2px;
+  }
+
+  .drive-rename-box input {
+    flex-grow: 1;
+    padding: 4px 6px;
+    font-size: 10px;
+    border: 1px solid #ced4da;
+    border-radius: 2px;
+  }
+
+  /* Drag & Drop */
+  .drive-drop-zone {
+    border: 2px dashed #ced4da;
+    border-radius: 2px;
+    background-color: #ffffff;
+    padding: 30px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+    min-height: 150px;
+  }
+
+  .drive-drop-zone.drag-over {
+    border-color: #198754;
+    background-color: #f4fbf7;
+  }
+
+  .drop-zone-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+
+  .drop-zone-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: #495057;
+  }
+
+  .drop-zone-subtext {
+    font-size: 10px;
+    color: #868e96;
+    margin-top: 4px;
+  }
+
+  /* Progress Bar */
+  .drive-upload-status-box {
+    background-color: #ffffff;
+    border: 1px solid #ced4da;
+    padding: 10px 12px;
+    border-radius: 2px;
+    margin-top: 12px;
+  }
+
+  .upload-progress-bar {
+    height: 6px;
+    background-color: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background-color: #198754;
+    transition: width 0.15s ease;
+  }
+
+  #drive-upload-msg {
+    font-size: 10px;
+    color: #495057;
+    margin: 0;
+  }
+
+  .btn-sm {
+    padding: 4px 8px;
+    font-size: 10px;
+    border-radius: 2px;
+    font-weight: 600;
+    border: 1px solid #ced4da;
+    background-color: #ffffff;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.1s ease;
+  }
+
+  .btn-sm:hover {
+    background-color: #e9ecef;
+    color: #212529;
+  }
+
+  .btn-sm.btn-success {
+    background-color: #198754;
+    border-color: #157347;
+    color: #ffffff;
+  }
+
+  .btn-sm.btn-success:hover {
+    background-color: #157347;
+  }
+</style>
+
+<!-- Klientside Service Broker för asynkrona Drive-anrop -->
+<script>
+  const DriveService = {
+    /**
+     * Kör upward hierarchy traversal för en fil i Drive
+     */
+    resolvePath: function(fileId, callback) {
+      if (typeof google !== "undefined" && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(callback)
+          .withFailureHandler(function(err) {
+            callback({ success: false, error: err.toString() });
+          })
+          .Drive_resolvePathAsynchronously(fileId);
+      } else {
+        // Lokal simulering/mock-svar
+        setTimeout(function() {
+          callback({
+            success: true,
+            path: `Skannat / 2507 / kvitto_moms_${fileId}.pdf`,
+            yymm: "2507",
+            fileName: `kvitto_moms_${fileId}.pdf`
+          });
+        }, 800);
+      }
+    },
+
+    /**
+     * Länkar kvitto till kalkylarkets rad (ENBART Kolumn H)
+     */
+    linkReceipt: function(sheetName, rowNum, fileId, callback) {
+      if (typeof google !== "undefined" && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(callback)
+          .withFailureHandler(function(err) {
+            callback({ success: false, error: err.toString() });
+          })
+          .Drive_linkReceiptToRow(sheetName, rowNum, fileId);
+      } else {
+        // Lokal simulering/mock-svar
+        setTimeout(function() {
+          callback({
+            success: true,
+            url: `https://drive.google.com/file/d/${fileId}/view`,
+            row: rowNum,
+            sheet: sheetName
+          });
+        }, 500);
+      }
+    },
+
+    /**
+     * Byter namn på en fil i Drive
+     */
+    renameFile: function(fileId, newName, callback) {
+      if (typeof google !== "undefined" && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(callback)
+          .withFailureHandler(function(err) {
+            callback({ success: false, error: err.toString() });
+          })
+          .Drive_renameFile(fileId, newName);
+      } else {
+        setTimeout(function() {
+          callback({ success: true, name: newName });
+        }, 400);
+      }
+    },
+
+    /**
+     * Laddar upp Base64-fildata till Drive
+     */
+    uploadFile: function(base64Data, fileName, mimeType, folderId, callback) {
+      if (typeof google !== "undefined" && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(callback)
+          .withFailureHandler(function(err) {
+            callback({ success: false, error: err.toString() });
+          })
+          .Drive_uploadFile(base64Data, fileName, mimeType, folderId);
+      } else {
+        setTimeout(function() {
+          callback({
+            success: true,
+            fileId: "mock_uploaded_" + Date.now(),
+            url: "https://drive.google.com/file/d/mock_uploaded/view",
+            name: fileName
+          });
+        }, 1200);
+      }
+    }
+  };
+</script>
+
+<!-- Lokal JavaScript-logik för DriveView-vyn -->
+<script>
+  window.DriveView_activeTx = null;
+
+  /**
+   * Extern trigger-funktion som anropas från BatchView när en rad väljs
+   * @param {Object} tx - Transaktionsobjektet
+   */
+  function DriveView_load(tx) {
+    window.DriveView_activeTx = tx;
+    
+    const titleEl = document.getElementById('drive-tx-title');
+    const metaEl = document.getElementById('drive-tx-meta');
+    
+    if (!tx) {
+      titleEl.innerText = "Inget val pågår";
+      metaEl.innerText = "Välj en transaktion i listan för att påbörja sökning";
+      document.getElementById('drive-results-list').innerHTML = `<p class="placeholder-text">Ingen transaktion aktiv. Markera en rad till vänster.</p>`;
+      return;
+    }
+
+    // Uppdatera header med transaktionsdetaljer
+    titleEl.innerText = `${tx.date} - ${tx.text}`;
+    metaEl.innerText = `Rad ${tx.row} | Belopp: ${tx.amount.toLocaleString('sv-SE', {minimumFractionDigits: 2})} kr | Buntstatus: ${tx.batchStatus || 'Ej buntad'}`;
+
+    // Starta asynkron sökning efter kvitton
+    DriveView_performSearch(tx);
+  }
+
+  /**
+   * Genomför asynkron sökning i simulerade eller riktiga mappar
+   */
+  function DriveView_performSearch(tx) {
+    const loader = document.getElementById('drive-loader');
+    const resultsContainer = document.getElementById('drive-results-list');
+    
+    loader.style.display = 'flex';
+    resultsContainer.innerHTML = '';
+
+    // Förbered sök-kontext baserat på datum YYMM
+    const dateParts = tx.date.split('-');
+    const yymm = dateParts[0].substring(2,4) + dateParts[1]; // t.ex. "2507"
+
+    // Simulerade sökresultat för lokal eller riktig sökning
+    // Vi skapar två semi-slumpmässiga fil-ID:n baserat på transaktionens unika radnummer
+    const file1Id = "file_" + tx.row + "_A";
+    const file2Id = "file_" + tx.row + "_B";
+
+    setTimeout(function() {
+      // Vi anropar vår Service Broker för att hämta information om filerna
+      DriveService.resolvePath(file1Id, function(res1) {
+        DriveService.resolvePath(file2Id, function(res2) {
+          loader.style.display = 'none';
+
+          if (!res1.success && !res2.success) {
+            resultsContainer.innerHTML = `<p class="placeholder-text" style="color: #dc3545;">Ett fel uppstod vid kontakt med Google Drive.</p>`;
+            return;
+          }
+
+          // Skapa matchande sökresultatkort i UI
+          let cardsHtml = '';
+          const mockFiles = [
+            { id: file1Id, name: `kvitto_${tx.date}_${Math.abs(tx.amount)}.pdf`, path: res1.path },
+            { id: file2Id, name: `underlag_${tx.date}_faktura.pdf`, path: res2.path }
+          ];
+
+          mockFiles.forEach(function(file) {
+            cardsHtml += `
+              <div class="drive-file-card" id="card-${file.id}">
+                <div class="drive-file-info">
+                  <div class="drive-file-name-container">
+                    <div class="drive-file-name" id="name-txt-${file.id}">${file.name}</div>
+                    <div class="drive-file-path">Sökväg: ${file.path}</div>
+                  </div>
+                </div>
+                <div class="drive-rename-box" id="rename-box-${file.id}" style="display: none;">
+                  <input type="text" id="rename-input-${file.id}" value="${file.name}" />
+                  <button class="btn-sm btn-success" onclick="DriveView_saveRename('${file.id}')">Spara</button>
+                  <button class="btn-sm" onclick="DriveView_toggleRename('${file.id}', false)">Avbryt</button>
+                </div>
+                <div class="drive-file-actions" id="actions-${file.id}">
+                  <button class="btn-sm" onclick="DriveView_toggleRename('${file.id}', true)">✏️ Byt namn</button>
+                  <a href="https://drive.google.com" target="_blank" class="btn-sm" style="text-decoration: none; display: inline-block;">👁️ Öppna i Drive</a>
+                  <button class="btn-sm btn-success" onclick="DriveView_linkFile('${file.id}')">🔗 Koppla till rad</button>
+                </div>
+              </div>
+            `;
+          });
+
+          resultsContainer.innerHTML = cardsHtml;
+        });
+      });
+    }, 400);
+  }
+
+  /**
+   * Visar/döljer fältet för namnbyte
+   */
+  function DriveView_toggleRename(fileId, show) {
+    const renameBox = document.getElementById(`rename-box-${fileId}`);
+    const actionsBox = document.getElementById(`actions-${fileId}`);
+    
+    if (show) {
+      renameBox.style.display = 'flex';
+      actionsBox.style.display = 'none';
+    } else {
+      renameBox.style.display = 'none';
+      actionsBox.style.display = 'flex';
+    }
+  }
+
+  /**
+   * Utför asynkront namnbyte via DriveService
+   */
+  function DriveView_saveRename(fileId) {
+    const input = document.getElementById(`rename-input-${fileId}`);
+    const newName = input.value.trim();
+    
+    if (!newName) {
+      alert("Filnamnet får inte vara tomt.");
+      return;
+    }
+
+    DriveService.renameFile(fileId, newName, function(res) {
+      if (res.success) {
+        const nameTxt = document.getElementById(`name-txt-${fileId}`);
+        if (nameTxt) nameTxt.innerText = res.name;
+        DriveView_toggleRename(fileId, false);
+      } else {
+        alert("Kunde inte byta namn på filen: " + res.error);
+      }
+    });
+  }
+
+  /**
+   * Kopplar vald fil till kalkylarksraden (ENBART Kolumn H!)
+   */
+  function DriveView_linkFile(fileId) {
+    const tx = window.DriveView_activeTx;
+    if (!tx) return;
+
+    if (confirm(`Vill du koppla denna fil till rad ${tx.row}?`)) {
+      const activeSheet = document.getElementById('select-sheet').value;
+
+      DriveService.linkReceipt(activeSheet, tx.row, fileId, function(res) {
+        if (res.success) {
+          alert(`Filen har framgångsrikt kopplats till rad ${tx.row}!`);
+          
+          // Uppdatera det lokala transaktions-state-objektet i BatchView direkt
+          if (window.BatchView_transactions) {
+            const localTx = window.BatchView_transactions.find(t => t.row === tx.row);
+            if (localTx) {
+              localTx.link = res.url;
+              // Uppdatera tabellen
+              if (typeof BatchView_filterAndRender === 'function') {
+                BatchView_filterAndRender('');
+              }
+            }
+          }
+          
+          // Växla automatiskt över användaren till Konteringsfliken i enlighet med flikhoppningslogiken!
+          if (typeof UI_switchTab === 'function') {
+            UI_switchTab('tab-journal');
+            if (typeof BatchView_selectByRow === 'function') {
+              BatchView_selectByRow(tx.row);
+            }
+          }
+        } else {
+          alert("Ett fel uppstod vid länkning av kvitto: " + res.error);
+        }
+      });
+    }
+  }
+
+  // --- Drag and Drop Logic ---
+  (function() {
+    const dropzone = document.getElementById('drive-dropzone');
+    const fileInput = document.getElementById('drive-file-input');
+
+    // Trigger filväljare vid klick
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    // Highlight vid dragover
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, e => {
+        e.preventDefault();
+        dropzone.classList.add('drag-over');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, e => {
+        e.preventDefault();
+        dropzone.classList.remove('drag-over');
+      }, false);
+    });
+
+    // Hantera drop av filer
+    dropzone.addEventListener('drop', e => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files.length > 0) {
+        DriveView_handleFiles(files);
+      }
+    });
+
+    // Hantera manuellt valda filer
+    fileInput.addEventListener('change', function() {
+      if (this.files.length > 0) {
+        DriveView_handleFiles(this.files);
+      }
+    });
+  })();
+
+  /**
+   * Läser in filen och konverterar till Base64 för strömmad uppladdning till Drive
+   */
+  function DriveView_handleFiles(files) {
+    const tx = window.DriveView_activeTx;
+    if (!tx) {
+      alert("Du måste välja en transaktion i listan innan du laddar upp ett verifikat.");
+      return;
+    }
+
+    const file = files[0];
+    const statusBox = document.getElementById('drive-upload-status');
+    const fill = document.getElementById('drive-progress-fill');
+    const msg = document.getElementById('drive-upload-msg');
+
+    statusBox.style.display = 'block';
+    fill.style.width = '20%';
+    msg.innerText = `Läser in: ${file.name}...`;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      fill.style.width = '50%';
+      msg.innerText = `Laddar upp till Google Drive...`;
+
+      const result = e.target.result;
+      const base64Data = result.split(',')[1]; // Ta bort "data:*/*;base64," header
+
+      // Hämta mapp-id om tillgängligt, annars null för automatisk placering
+      const folderId = null; 
+
+      DriveService.uploadFile(base64Data, file.name, file.type, folderId, function(res) {
+        if (res.success) {
+          fill.style.width = '100%';
+          msg.innerText = `Klar! Uppladdad som ${res.name}`;
+          
+          setTimeout(function() {
+            statusBox.style.display = 'none';
+            // Fråga om filen ska kopplas direkt
+            if (confirm(`Uppladdning lyckades! Vill du koppla ${res.name} till vald transaktionsrad ${tx.row}?`)) {
+              DriveView_linkFile(res.fileId);
+            } else {
+              // Ladda om sökningen så den nya filen visas i listan
+              DriveView_performSearch(tx);
+            }
+          }, 1000);
+        } else {
+          fill.style.width = '0%';
+          msg.innerText = `Ett fel uppstod: ${res.error}`;
+          alert("Kunde inte ladda upp filen till Google Drive: " + res.error);
+        }
+      });
+    };
+
+    reader.readAsDataURL(file);
+  }
+</script>

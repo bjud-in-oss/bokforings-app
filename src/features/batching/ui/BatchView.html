@@ -369,34 +369,14 @@
     // Hantera flik-hoppning och asynkron Drive-sökning baserat på länkens status (UX State Machine)
     const hasLink = tx.link && tx.link.trim() !== '';
     
+    // Ladda alltid in transaktionen i DriveView
+    if (typeof DriveView_load === 'function') {
+      DriveView_load(tx);
+    }
+    
     if (!hasLink) {
       // 1. Rad saknar länk -> Byt automatiskt till 'Verifikat'
       UI_switchTab('tab-verification');
-      
-      const statusDiv = document.getElementById('verification-status');
-      const containerDiv = document.getElementById('verification-container');
-      
-      if (statusDiv) statusDiv.innerText = "Söker filsökväg...";
-      if (containerDiv) containerDiv.innerHTML = `<p class="placeholder-text">Söker efter filer i ÅÅMM-mappar på Google Drive...</p>`;
-      
-      // Simulera Drive-sökning asynkront
-      setTimeout(function() {
-        if (statusDiv) statusDiv.innerText = `Kopplad till mapp: Skannat - ${tx.date.substring(2,7).replace('-', '')}`;
-        if (containerDiv) {
-          containerDiv.innerHTML = `
-            <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 12px; border-radius: 2px;">
-              <p style="font-weight: 600; margin-bottom: 8px;">Matchande filer hittade på Drive:</p>
-              <ul style="list-style-type: none; padding-left: 0;">
-                <li style="padding: 6px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                  <span>📄 kvitto_${tx.date}_${Math.abs(tx.amount)}.pdf</span>
-                  <button class="btn-secondary" style="padding: 2px 6px; font-size: 10px;" onclick="BatchView_mockSaveLink('${tx.row}')">Koppla fil</button>
-                </li>
-              </ul>
-            </div>
-          `;
-        }
-      }, 800);
-      
     } else {
       // 2. Rad har redan länk -> Byt automatiskt till 'Kontering'
       UI_switchTab('tab-journal');
