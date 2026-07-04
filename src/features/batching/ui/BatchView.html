@@ -369,9 +369,12 @@
     // Hantera flik-hoppning och asynkron Drive-sökning baserat på länkens status (UX State Machine)
     const hasLink = tx.link && tx.link.trim() !== '';
     
-    // Ladda alltid in transaktionen i DriveView
+    // Ladda alltid in transaktionen i DriveView och TemplateView
     if (typeof DriveView_load === 'function') {
       DriveView_load(tx);
+    }
+    if (typeof TemplateView_load === 'function') {
+      TemplateView_load(tx);
     }
     
     if (!hasLink) {
@@ -380,43 +383,6 @@
     } else {
       // 2. Rad har redan länk -> Byt automatiskt till 'Kontering'
       UI_switchTab('tab-journal');
-      
-      const journalContainer = document.getElementById('journal-container');
-      if (journalContainer) {
-        journalContainer.innerHTML = `
-          <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 16px; border-radius: 2px;">
-            <p style="font-weight: 600; font-size: 13px; margin-bottom: 12px;">Föreslagen Kontering (Kategori: Inköp Hårdvara)</p>
-            <table class="industrial-table" style="margin-bottom: 16px;">
-              <thead>
-                <tr>
-                  <th>Konto</th>
-                  <th>Kontonamn</th>
-                  <th style="text-align: right;">Debet</th>
-                  <th style="text-align: right;">Kredit</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>4000</td>
-                  <td>Inköp hårdvara</td>
-                  <td style="text-align: right;">${tx.amount.toFixed(2)}</td>
-                  <td style="text-align: right;"></td>
-                </tr>
-                <tr>
-                  <td>1930</td>
-                  <td>Företagskonto</td>
-                  <td style="text-align: right;"></td>
-                  <td style="text-align: right;">${tx.amount.toFixed(2)}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div style="display: flex; gap: 8px; justify-content: flex-end;">
-              <button class="btn-secondary" onclick="BatchView_mockAddRow()">+ Lägg till rad</button>
-              <button class="btn-undo-batch" style="background-color: #198754;" onclick="BatchView_mockBatch()">Godkänn & Bunta</button>
-            </div>
-          </div>
-        `;
-      }
     }
   }
 

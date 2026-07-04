@@ -1,0 +1,805 @@
+<!-- TemplateView.html - Vyn för kategorival, kontering och verifiering -->
+<div class="template-view-container">
+  <!-- Status Header för vald transaktion -->
+  <div class="template-status-header">
+    <div class="template-header-title" id="template-tx-title">Inget val pågår</div>
+    <div class="template-header-subtitle" id="template-tx-meta">Välj en transaktion i listan för att ladda konteringsmallar</div>
+  </div>
+
+  <div class="template-content-body">
+    <!-- Kontroller: Mall / Kategori-väljare -->
+    <div class="template-controls-bar">
+      <div class="control-group">
+        <label for="template-category-select">Välj konteringsmall/kategori:</label>
+        <div class="select-wrapper">
+          <select id="template-category-select" onchange="TemplateView_onCategoryChange()">
+            <option value="">-- Välj en mall --</option>
+            <option value="_Hyra">Hyra av lokal (_Hyra)</option>
+            <option value="_Mobil">Mobil & Bredband (_Mobil)</option>
+            <option value="_Försäljning">Försäljning / Kundfaktura (_Försäljning)</option>
+            <option value="_Lön">Löneutbetalning (_Lön)</option>
+            <option value="_Kontorsmaterial">Kontorsmaterial / Förbrukningsartiklar (_Kontorsmaterial)</option>
+            <option value="_Bankavgift">Bankavgifter & Intressen (_Bankavgift)</option>
+            <option value="_EgenInsättning">Egen insättning / Delägarkonto (_EgenInsättning)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Extern Löne-Import knapp (visas enbart om transaktionen är av typen Lön eller länk finns) -->
+      <div id="template-salary-import-box" class="control-group" style="display: none;">
+        <button class="btn-sm btn-secondary" onclick="TemplateView_importExternalSalary()">
+          📥 Parsa extern lönespecifikation (Kolumn H)
+        </button>
+      </div>
+    </div>
+
+    <!-- Huvudinnehåll: Huvudboken / Konteringsrader -->
+    <div class="template-ledger-section">
+      <div class="template-section-title">Konteringsförslag</div>
+
+      <!-- Spinner för laddning -->
+      <div id="template-loader" class="template-spinner-container" style="display: none;">
+        <div class="template-spinner"></div>
+        <p>Konsulterar kalkylarkets inbyggda formelmotor...</p>
+      </div>
+
+      <div id="template-ledger-wrapper">
+        <table class="ledger-table">
+          <thead>
+            <tr>
+              <th style="width: 15%;">Konto</th>
+              <th style="width: 45%;">Kontonamn</th>
+              <th style="width: 20%; text-align: right;">Debet</th>
+              <th style="width: 20%; text-align: right;">Kredit</th>
+              <th style="width: 50px;"></th>
+            </tr>
+          </thead>
+          <tbody id="ledger-rows-body">
+            <!-- Dynamiska rader laddas här -->
+          </tbody>
+        </table>
+
+        <!-- Lägg till manuell rad -->
+        <button class="btn-add-row" onclick="TemplateView_addManualRow()">➕ Lägg till konto-rad</button>
+      </div>
+    </div>
+
+    <!-- Sammanfattning & Buntningstopp -->
+    <div class="template-footer-summary">
+      <div class="summary-grid">
+        <div class="summary-box">
+          <span class="summary-label">Summa Debet:</span>
+          <span class="summary-value" id="summary-total-debet">0,00 kr</span>
+        </div>
+        <div class="summary-box">
+          <span class="summary-label">Summa Kredit:</span>
+          <span class="summary-value" id="summary-total-kredit">0,00 kr</span>
+        </div>
+        <div class="summary-box alert-box" id="summary-diff-container">
+          <span class="summary-label">Differens:</span>
+          <span class="summary-value" id="summary-diff">0,00 kr</span>
+        </div>
+      </div>
+
+      <!-- Varningsmeddelande och Buntningsspärr -->
+      <div class="barrier-action-area">
+        <p id="barrier-warning-msg" class="barrier-warning-text">
+          ⚠️ Journalposten måste balansera (Differens: 0,00 kr) innan den kan sparas.
+        </p>
+        <button id="btn-save-journal" class="btn-save-action" disabled onclick="TemplateView_saveJournal()">
+          Bunta & Spara Journalpost
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Lokala stilar för TemplateView-vyn -->
+<style>
+  .template-view-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background-color: #ffffff;
+    box-sizing: border-box;
+  }
+
+  .template-status-header {
+    background-color: #212529;
+    color: #f8f9fa;
+    padding: 12px 16px;
+    border-bottom: 2px solid #0d6efd;
+  }
+
+  .template-header-title {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .template-header-subtitle {
+    font-size: 10px;
+    color: #adb5bd;
+    margin-top: 4px;
+  }
+
+  .template-content-body {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .template-controls-bar {
+    display: flex;
+    gap: 16px;
+    background-color: #f8f9fa;
+    padding: 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 2px;
+    align-items: flex-end;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .control-group label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #495057;
+    text-transform: uppercase;
+  }
+
+  .select-wrapper select {
+    padding: 6px 12px;
+    font-size: 11px;
+    border: 1px solid #ced4da;
+    border-radius: 2px;
+    background-color: #ffffff;
+    color: #212529;
+    min-width: 250px;
+  }
+
+  .template-ledger-section {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #dee2e6;
+    border-radius: 2px;
+    padding: 12px;
+  }
+
+  .template-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #495057;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #e9ecef;
+    padding-bottom: 4px;
+  }
+
+  /* Spinner */
+  .template-spinner-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: #868e96;
+    font-size: 11px;
+    gap: 12px;
+  }
+
+  .template-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #0d6efd;
+    border-radius: 50%;
+    animation: template-spin 1s linear infinite;
+  }
+
+  @keyframes template-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* Tabell */
+  .ledger-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+  }
+
+  .ledger-table th {
+    font-size: 10px;
+    font-weight: 600;
+    color: #868e96;
+    text-transform: uppercase;
+    padding: 6px;
+    border-bottom: 2px solid #dee2e6;
+    text-align: left;
+  }
+
+  .ledger-table td {
+    padding: 6px 4px;
+    border-bottom: 1px solid #e9ecef;
+    vertical-align: middle;
+  }
+
+  .ledger-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    font-size: 11px;
+    border: 1px solid #ced4da;
+    border-radius: 2px;
+  }
+
+  .ledger-input-number {
+    text-align: right;
+  }
+
+  .btn-add-row {
+    background: none;
+    border: 1px dashed #0d6efd;
+    color: #0d6efd;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.1s ease;
+  }
+
+  .btn-add-row:hover {
+    background-color: #ebf3ff;
+  }
+
+  .btn-delete-row {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 4px;
+  }
+
+  /* Footer & Buntning */
+  .template-footer-summary {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 2px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .summary-grid {
+    display: flex;
+    gap: 20px;
+    justify-content: flex-end;
+  }
+
+  .summary-box {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    background-color: #ffffff;
+    border: 1px solid #ced4da;
+    padding: 8px 16px;
+    min-width: 120px;
+    border-radius: 2px;
+  }
+
+  .summary-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    color: #868e96;
+    font-weight: 600;
+  }
+
+  .summary-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: #212529;
+    margin-top: 2px;
+  }
+
+  .summary-box.alert-box {
+    background-color: #fdf2f2;
+    border-color: #f5c2c2;
+  }
+
+  .summary-box.alert-box.balanced {
+    background-color: #f4fbf7;
+    border-color: #a3cfbb;
+  }
+
+  .summary-box.alert-box .summary-value {
+    color: #dc3545;
+  }
+
+  .summary-box.alert-box.balanced .summary-value {
+    color: #198754;
+  }
+
+  .barrier-action-area {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px dashed #dee2e6;
+    padding-top: 12px;
+  }
+
+  .barrier-warning-text {
+    font-size: 11px;
+    color: #dc3545;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .btn-save-action {
+    background-color: #198754;
+    color: #ffffff;
+    border: 1px solid #157347;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s ease;
+  }
+
+  .btn-save-action:disabled {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+    color: #adb5bd;
+    cursor: not-allowed;
+  }
+
+  .btn-save-action:not(:disabled):hover {
+    background-color: #157347;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  }
+</style>
+
+<!-- Klientside Service Broker för asynkrona konteringsanrop -->
+<script>
+  const TemplateService = {
+    /**
+     * Kallar på Apps Script-motor för att ladda konteringsrader baserat på kategori i A1
+     */
+    loadTemplate: function(sheetName, rowNum, categoryName, callback) {
+      if (typeof google !== "undefined" && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(callback)
+          .withFailureHandler(function(err) {
+            callback({ success: false, error: err.toString() });
+          })
+          .Template_loadTemplateForTransaction(sheetName, rowNum, categoryName);
+      } else {
+        // Lokal simulering baserat på vald kategori
+        setTimeout(function() {
+          let rows = [];
+          let moms = 0;
+          
+          if (categoryName === "_Hyra") {
+            rows = [
+              { account: "5010", name: "Lokalhyra", debet: 1000, kredit: 0 },
+              { account: "2641", name: "Ingående moms (25%)", debet: 250, kredit: 0 },
+              { account: "1930", name: "Företagskonto", debet: 0, kredit: 1250 }
+            ];
+            moms = 250;
+          } else if (categoryName === "_Mobil") {
+            rows = [
+              { account: "6210", name: "Telekommunikation", debet: 400, kredit: 0 },
+              { account: "2641", name: "Ingående moms (25%)", debet: 100, kredit: 0 },
+              { account: "1930", name: "Företagskonto", debet: 0, kredit: 500 }
+            ];
+            moms = 100;
+          } else if (categoryName === "_Försäljning") {
+            rows = [
+              { account: "1930", name: "Företagskonto", debet: 2500, kredit: 0 },
+              { account: "3001", name: "Försäljning tjänster 25% moms", debet: 0, kredit: 2000 },
+              { account: "2611", name: "Utgående moms (25%)", debet: 0, kredit: 500 }
+            ];
+          } else if (categoryName === "_Bankavgift") {
+            rows = [
+              { account: "6570", name: "Bankkostnader", debet: 125, kredit: 0 },
+              { account: "1930", name: "Företagskonto", debet: 0, kredit: 125 }
+            ];
+          } else {
+            rows = [
+              { account: "1930", name: "Företagskonto", debet: 0, kredit: 0 },
+              { account: "4000", name: "Inköp varor", debet: 0, kredit: 0 }
+            ];
+          }
+          
+          callback({
+            success: true,
+            rows: rows,
+            momsAmount: moms
+          });
+        }, 500);
+      }
+    },
+
+    /**
+     * Sparar den slutgiltiga balanserade journalposten
+     */
+    saveJournal: function(sheetName, rowNum, categoryName, finalRows, momsAmount, callback) {
+      if (typeof google !== "undefined" && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(callback)
+          .withFailureHandler(function(err) {
+            callback({ success: false, error: err.toString() });
+          })
+          .Template_saveJournalEntry(sheetName, rowNum, categoryName, finalRows, momsAmount);
+      } else {
+        setTimeout(function() {
+          callback({ success: true });
+        }, 400);
+      }
+    },
+
+    /**
+     * Parsar ett externt lönekalkylark ifall en länk laddats upp i kolumn H
+     */
+    parseSalary: function(url, callback) {
+      if (typeof google !== "undefined" && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(callback)
+          .withFailureHandler(function(err) {
+            callback({ success: false, error: err.toString() });
+          })
+          .Template_parseSalarySpecification(url);
+      } else {
+        // Lokal simulering för löneimport
+        setTimeout(function() {
+          callback({
+            success: true,
+            rows: [
+              { account: "7010", name: "Löner till kollektivanställda", debet: 25000, kredit: 0 },
+              { account: "2710", name: "Personalens källskatt", debet: 0, kredit: 7500 },
+              { account: "1930", name: "Företagskonto", debet: 0, kredit: 17500 },
+              { account: "7510", name: "Lagstadgade arbetsgivaravgifter", debet: 7850, kredit: 0 },
+              { account: "2730", name: "Lagstadgade sociala avgifter", debet: 0, kredit: 7850 }
+            ]
+          });
+        }, 800);
+      }
+    }
+  };
+</script>
+
+<!-- Lokal JavaScript-logik för TemplateView -->
+<script>
+  window.TemplateView_activeTx = null;
+  window.TemplateView_momsAmount = 0;
+  window.TemplateView_rows = [];
+
+  /**
+   * Extern trigger-funktion som anropas när en transaktion väljs eller laddas
+   * @param {Object} tx - Transaktionsobjektet
+   */
+  function TemplateView_load(tx) {
+    window.TemplateView_activeTx = tx;
+    
+    const titleEl = document.getElementById('template-tx-title');
+    const metaEl = document.getElementById('template-tx-meta');
+    const importBox = document.getElementById('template-salary-import-box');
+    
+    // Nollställ val
+    document.getElementById('template-category-select').value = '';
+    document.getElementById('ledger-rows-body').innerHTML = '';
+    window.TemplateView_rows = [];
+    window.TemplateView_momsAmount = 0;
+    TemplateView_calculateTotals();
+
+    if (!tx) {
+      titleEl.innerText = "Inget val pågår";
+      metaEl.innerText = "Välj en transaktion i listan för att ladda konteringsmallar";
+      importBox.style.display = 'none';
+      return;
+    }
+
+    titleEl.innerText = `${tx.date} - ${tx.text}`;
+    metaEl.innerText = `Rad ${tx.row} | Belopp: ${tx.amount.toLocaleString('sv-SE', {minimumFractionDigits: 2})} kr | Buntstatus: ${tx.batchStatus || 'Ej buntad'}`;
+
+    // Kontrollera om det finns en löne-länk (giltig Google Sheets URL) i Kolumn H
+    const hasSheetLink = tx.link && tx.link.includes('spreadsheets/d/');
+    if (hasSheetLink) {
+      importBox.style.display = 'block';
+    } else {
+      importBox.style.display = 'none';
+    }
+
+    // Om transaktionen redan har en Sparad Kategori, välj den automatiskt i dropdownen!
+    if (tx.category && tx.category.startsWith('_')) {
+      const select = document.getElementById('template-category-select');
+      for (let i = 0; i < select.options.length; i++) {
+        if (select.options[i].value === tx.category) {
+          select.value = tx.category;
+          TemplateView_onCategoryChange();
+          break;
+        }
+      }
+    }
+  }
+
+  /**
+   * Reagerar på ändringar i kategoridropdownen
+   */
+  function TemplateView_onCategoryChange() {
+    const select = document.getElementById('template-category-select');
+    const categoryName = select.value;
+    const tx = window.TemplateView_activeTx;
+
+    if (!tx || !categoryName) {
+      document.getElementById('ledger-rows-body').innerHTML = '';
+      window.TemplateView_rows = [];
+      TemplateView_calculateTotals();
+      return;
+    }
+
+    const loader = document.getElementById('template-loader');
+    const ledgerWrapper = document.getElementById('template-ledger-wrapper');
+    const activeSheet = document.getElementById('select-sheet').value;
+
+    loader.style.display = 'flex';
+    ledgerWrapper.style.opacity = '0.4';
+
+    TemplateService.loadTemplate(activeSheet, tx.row, categoryName, function(res) {
+      loader.style.display = 'none';
+      ledgerWrapper.style.opacity = '1';
+
+      if (res.success) {
+        window.TemplateView_rows = res.rows;
+        window.TemplateView_momsAmount = res.momsAmount || 0;
+        
+        // Anpassa Debet/Kredit på motkonton för att matcha transaktionsbeloppet helt!
+        TemplateView_normalizeAmounts(tx.amount);
+        TemplateView_renderLedgerRows();
+      } else {
+        alert("Ett fel uppstod vid inläsning av mall: " + res.error);
+      }
+    });
+  }
+
+  /**
+   * Automatiskt balanserar och skalar mallens belopp mot transaktionens riktiga belopp
+   */
+  function TemplateView_normalizeAmounts(targetAmount) {
+    const absAmount = Math.abs(targetAmount);
+    
+    // Identifiera om transaktionen är en utbetalning (negativt) eller inbetalning (positivt)
+    const isOutflow = targetAmount < 0;
+
+    // Hitta 1930 rader och kostnads/momsrader
+    window.TemplateView_rows.forEach(function(row) {
+      if (row.account === "1930") {
+        if (isOutflow) {
+          row.debet = 0;
+          row.kredit = absAmount;
+        } else {
+          row.debet = absAmount;
+          row.kredit = 0;
+        }
+      } else if (row.account === "2641" || row.account === "2611") {
+        // Moms-beräkning (20% av totalen om 25% moms, t.ex. 250 moms på 1250 totalt)
+        const computedMoms = absAmount * 0.20;
+        if (row.account === "2641") {
+          row.debet = computedMoms;
+          row.kredit = 0;
+          window.TemplateView_momsAmount = computedMoms;
+        } else {
+          row.debet = 0;
+          row.kredit = computedMoms;
+          window.TemplateView_momsAmount = computedMoms;
+        }
+      } else {
+        // Huvudkonto (Kostnad eller Intäkt)
+        const computedCost = absAmount * 0.80; // Resterande 80% (om moms finns)
+        // Om ingen momsrad finns i mallen, skala till 100%
+        const hasMoms = window.TemplateView_rows.some(r => r.account === "2641" || r.account === "2611");
+        const finalCost = hasMoms ? computedCost : absAmount;
+
+        if (isOutflow) {
+          row.debet = finalCost;
+          row.kredit = 0;
+        } else {
+          row.debet = 0;
+          row.kredit = finalCost;
+        }
+      }
+    });
+  }
+
+  /**
+   * Rendrerar konteringsraderna i HTML-tabellen
+   */
+  function TemplateView_renderLedgerRows() {
+    const body = document.getElementById('ledger-rows-body');
+    body.innerHTML = '';
+
+    window.TemplateView_rows.forEach(function(row, idx) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <input type="text" class="ledger-input" value="${row.account}" onchange="TemplateView_onCellChange(${idx}, 'account', this.value)" />
+        </td>
+        <td>
+          <input type="text" class="ledger-input" value="${row.name}" onchange="TemplateView_onCellChange(${idx}, 'name', this.value)" />
+        </td>
+        <td>
+          <input type="number" class="ledger-input ledger-input-number" step="0.01" value="${row.debet || ''}" oninput="TemplateView_onCellChange(${idx}, 'debet', this.value)" />
+        </td>
+        <td>
+          <input type="number" class="ledger-input ledger-input-number" step="0.01" value="${row.kredit || ''}" oninput="TemplateView_onCellChange(${idx}, 'kredit', this.value)" />
+        </td>
+        <td style="text-align: center;">
+          <button class="btn-delete-row" onclick="TemplateView_deleteRow(${idx})">🗑️</button>
+        </td>
+      `;
+      body.appendChild(tr);
+    });
+
+    TemplateView_calculateTotals();
+  }
+
+  /**
+   * Hanterar manuella uppdateringar i de olika cellerna i tabellen
+   */
+  function TemplateView_onCellChange(idx, field, value) {
+    if (!window.TemplateView_rows[idx]) return;
+
+    if (field === 'debet' || field === 'kredit') {
+      window.TemplateView_rows[idx][field] = Number(value) || 0;
+    } else {
+      window.TemplateView_rows[idx][field] = value;
+    }
+
+    // Uppdatera moms-beloppet i realtid om användaren ändrar i debet på konto 2641
+    if (window.TemplateView_rows[idx].account === "2641" && field === "debet") {
+      window.TemplateView_momsAmount = Number(value) || 0;
+    }
+
+    TemplateView_calculateTotals();
+  }
+
+  /**
+   * Lägger till en ny tom rad i konteringstabellen
+   */
+  function TemplateView_addManualRow() {
+    window.TemplateView_rows.push({
+      account: '',
+      name: 'Manuellt konto',
+      debet: 0,
+      kredit: 0
+    });
+    TemplateView_renderLedgerRows();
+  }
+
+  /**
+   * Raderar en rad från konteringstabellen
+   */
+  function TemplateView_deleteRow(idx) {
+    window.TemplateView_rows.splice(idx, 1);
+    TemplateView_renderLedgerRows();
+  }
+
+  /**
+   * Beräknar realtidssummorna och utvärderar "Buntningsspärren" (Balancing Barrier)
+   */
+  function TemplateView_calculateTotals() {
+    let totalDebet = 0;
+    let totalKredit = 0;
+
+    window.TemplateView_rows.forEach(function(row) {
+      totalDebet += Number(row.debet) || 0;
+      totalKredit += Number(row.kredit) || 0;
+    });
+
+    const diff = totalDebet - totalKredit;
+
+    document.getElementById('summary-total-debet').innerText = totalDebet.toLocaleString('sv-SE', { minimumFractionDigits: 2 }) + " kr";
+    document.getElementById('summary-total-kredit').innerText = totalKredit.toLocaleString('sv-SE', { minimumFractionDigits: 2 }) + " kr";
+    document.getElementById('summary-diff').innerText = Math.abs(diff).toLocaleString('sv-SE', { minimumFractionDigits: 2 }) + " kr";
+
+    const diffContainer = document.getElementById('summary-diff-container');
+    const warningMsg = document.getElementById('barrier-warning-msg');
+    const saveBtn = document.getElementById('btn-save-journal');
+
+    // Stenhård flyttnings- och buntningsspärr: Tolerans för översättningsfel mindre än 0.01 kr
+    const isBalanced = Math.abs(diff) < 0.01 && window.TemplateView_rows.length > 0;
+
+    if (isBalanced) {
+      diffContainer.classList.add('balanced');
+      warningMsg.style.display = 'none';
+      saveBtn.removeAttribute('disabled');
+    } else {
+      diffContainer.classList.remove('balanced');
+      warningMsg.style.display = 'block';
+      if (window.TemplateView_rows.length === 0) {
+        warningMsg.innerText = "⚠️ Inga konteringsrader laddade.";
+      } else {
+        warningMsg.innerText = `⚠️ Journalposten måste balansera (Differens: ${Math.abs(diff).toLocaleString('sv-SE', { minimumFractionDigits: 2 })} kr)`;
+      }
+      saveBtn.setAttribute('disabled', 'true');
+    }
+  }
+
+  /**
+   * Importerar lönedata asynkront från det länkade kalkylarket i Kolumn H
+   */
+  function TemplateView_importExternalSalary() {
+    const tx = window.TemplateView_activeTx;
+    if (!tx || !tx.link) return;
+
+    const loader = document.getElementById('template-loader');
+    const ledgerWrapper = document.getElementById('template-ledger-wrapper');
+
+    loader.style.display = 'flex';
+    ledgerWrapper.style.opacity = '0.4';
+
+    TemplateService.parseSalary(tx.link, function(res) {
+      loader.style.display = 'none';
+      ledgerWrapper.style.opacity = '1';
+
+      if (res.success) {
+        window.TemplateView_rows = res.rows;
+        window.TemplateView_momsAmount = 0; // Ingen moms på löner
+        document.getElementById('template-category-select').value = '_Lön';
+        TemplateView_renderLedgerRows();
+        alert("Lönespecifikation har importerats och parsa-ats framgångsrikt!");
+      } else {
+        alert("Kunde inte parsa lönespecifikationen: " + res.error);
+      }
+    });
+  }
+
+  /**
+   * Sparar konteringen via klientsides Service Broker
+   */
+  function TemplateView_saveJournal() {
+    const tx = window.TemplateView_activeTx;
+    const categorySelect = document.getElementById('template-category-select');
+    const categoryName = categorySelect.value || "_Manuell";
+    
+    if (!tx) return;
+
+    const activeSheet = document.getElementById('select-sheet').value;
+
+    TemplateService.saveJournal(activeSheet, tx.row, categoryName, window.TemplateView_rows, window.TemplateView_momsAmount, function(res) {
+      if (res.success) {
+        alert(`Journalposten har framgångsrikt sparats och verifierats till rad ${tx.row}!`);
+        
+        // Uppdatera det lokala transaktions-state-objektet i BatchView direkt
+        if (window.BatchView_transactions) {
+          const localTx = window.BatchView_transactions.find(t => t.row === tx.row);
+          if (localTx) {
+            localTx.category = categoryName;
+            localTx.status = 'v'; // Uppdatera lokalt state
+            // Uppdatera tabellen
+            if (typeof BatchView_filterAndRender === 'function') {
+              BatchView_filterAndRender('');
+            }
+          }
+        }
+
+        // Töm vyn
+        TemplateView_load(null);
+      } else {
+        alert("Kunde inte spara journalposten: " + res.error);
+      }
+    });
+  }
+</script>

@@ -29,11 +29,16 @@ app.get('/', (req, res) => {
     const driveViewPath = path.join(__dirname, 'src', 'features', 'drive', 'ui', 'DriveView.html');
     const driveViewHtml = fs.readFileSync(driveViewPath, 'utf8');
 
+    // Read TemplateView file
+    const templateViewPath = path.join(__dirname, 'src', 'features', 'template', 'ui', 'TemplateView.html');
+    const templateViewHtml = fs.readFileSync(templateViewPath, 'utf8');
+
     // Replace the scriptlet tags with file contents
     html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/main\/ui\/)?CSS['"]\);\s*\?>/g, cssHtml);
     html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/main\/ui\/)?JS['"]\);\s*\?>/g, jsHtml);
     html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/features\/batching\/ui\/)?BatchView['"]\);\s*\?>/g, batchViewHtml);
     html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/features\/drive\/ui\/)?DriveView['"]\);\s*\?>/g, driveViewHtml);
+    html = html.replace(/<\?!=\s*Init_include\(['"](?:src\/features\/template\/ui\/)?TemplateView['"]\);\s*\?>/g, templateViewHtml);
 
     res.setHeader('Content-Type', 'text/html');
     res.send(html);
